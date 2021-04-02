@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "description": "A functional reactive programming (FRP) web framework based on sodiumjs",
   "author": "Jamie Bertram <jhbertra@gmail.com>",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/jhbertra/sodium-dom.git"
@@ -10,7 +11,8 @@
   "bugs": {
     "url": "https://github.com/jhbertra/sodium-dom/issues"
   },
-  "license": "MIT",
+  "main": "./dist/mod.js",
+  "types": "./dist/mod.d.ts",
   "devDependencies": {
     "@types/node": "^14.14.37",
     "ts-node": "^9.1.1",
