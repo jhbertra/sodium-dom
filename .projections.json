@@ -1,0 +1,14 @@
+{
+  "*.css": {
+    "linters": ["prettier"]
+  },
+  "*.md": {
+    "linters": ["prettier"]
+  },
+  "*.js": {
+    "linters": ["eslint"]
+  },
+  "*.ts": {
+    "linters": ["eslint"]
+  }
+}

@@ -24,5 +24,8 @@
     "ts-node": "^9.1.1",
     "tslib": "^2.1.0",
     "typescript": "^4.2.3"
+  },
+  "dependencies": {
+    "sodiumjs": "^3.0.7"
   }
 }
