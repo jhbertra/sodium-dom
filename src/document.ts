@@ -1,4 +1,12 @@
-import { Cell, Operational, Transaction, Unit } from "sodiumjs";
+import {
+  Cell,
+  Operational,
+  Stream,
+  StreamSink,
+  Transaction,
+  Unit,
+  Vertex,
+} from "sodiumjs";
 
 // Public API
 
@@ -15,7 +23,11 @@ export type Attributes = Record<string, AttributeValue>;
 /**
  * A record containing the set of events available for each DOM element.
  */
-export interface DomEvents {}
+export interface DomEvents {
+  <T extends keyof HTMLElementEventMap>(name: T): Stream<
+    HTMLElementEventMap[T]
+  >;
+}
 
 export interface El {
   readonly element: HTMLElement;
@@ -23,13 +35,13 @@ export interface El {
 }
 
 /**
- * A "widget" is just a parameterless function that returns some result, where the
- * following rules apply:
+ * A "widget" is just a parameterless function that returns some result, where
+ * the following rules apply:
  *
  * 1. Widgets can call other widgets directly.
  * 2. Widgets can call DOM-building functions like text, el.
- * 3. The top / app-level widget should be passed as an argument to a widget rendering
- *    function sich as `mainWidget` or `renderWidget`.
+ * 3. The top / app-level widget should be passed as an argument to a widget
+ *    rendering function sich as `mainWidget` or `renderWidget`.
  */
 export type Widget<T> = () => T;
 
@@ -45,7 +57,7 @@ export function mainWidget(widget: Widget<void>): void {
 /**
  * Render a widget inside a specific rootElement.
  *
- * @param rootElement an HTML element that will contain your application's DOM structure.
+ * @param rootElement an HTML element that will contain your application's DOMstructure.
  * @param widget the top-level widget of your application.
  */
 export function renderWidget(
@@ -220,7 +232,9 @@ function DomBuilder(root: HTMLElement): DomBuilder {
 
   function bind<T>(value: T | Cell<T>, doBind: (v: T) => void) {
     if (value instanceof Cell) {
-      doBind(value.sample());
+      Transaction.currentTransaction.post(0, () => {
+        doBind(value.sample());
+      });
       disposers.push(Operational.updates(value).listen(doBind));
     } else {
       doBind(value);
@@ -258,16 +272,43 @@ function DomBuilder(root: HTMLElement): DomBuilder {
             childrenBuilder,
             children,
           );
-          return [
-            [
-              {
-                element,
-                events: {},
-              },
-              childrenResult,
-            ],
-            childrenBuilder.dispose,
-          ];
+          const eventCache: {
+            [key in keyof HTMLElementEventMap]?: StreamSink<
+              HTMLElementEventMap[key]
+            >;
+          } = {};
+          const events = <T extends keyof HTMLElementEventMap>(
+            event: T,
+          ): Stream<HTMLElementEventMap[T]> => {
+            let stream = (eventCache[event] as unknown) as StreamSink<
+              HTMLElementEventMap[T]
+            >;
+            if (!stream) {
+              stream = new StreamSink<HTMLElementEventMap[T]>();
+              stream.setVertex__(
+                new Vertex(event, 0, [
+                  (new Source(Vertex.NULL, () => {
+                    if (isDisposed) {
+                      throw new Error(
+                        "This widget has been disposed. You cannot listen to its events anymore.",
+                      );
+                    }
+                    const l: EventListener = (e) =>
+                      stream.send(e as HTMLElementEventMap[T]);
+                    element.addEventListener(event, l);
+                    return () => element.removeEventListener(event, l);
+                  }) as unknown) as import("sodiumjs/dist/typings/sodium/Vertex").Source,
+                ]),
+              );
+              eventCache[event] = (stream as unknown) as typeof eventCache[T];
+            }
+            return stream;
+          };
+          const el: El = {
+            element,
+            events,
+          };
+          return [[el, childrenResult], childrenBuilder.dispose];
         },
       );
     },
@@ -287,4 +328,59 @@ function renderWidgetInternal<T>(builder: DomBuilder, widget: Widget<T>): T {
       InternalStaticState.currentBuilder = prevBuilder;
     }
   });
+}
+
+// TODO OBVIOUSLY This should not live here!!! This is copy-pasted from
+// sodium-typescript, which does not export Source. It definitely should, as it
+// is part of the public API. Exporting Vertex constructors without exporting
+// Source makes no sense. This needs to be fixed in a PR.
+//
+// For now, we are lucky enough that this class doesn't depend on any module
+// state in Vertex... or we'd be really hooped.
+class Source {
+  // Note:
+  // When register_ == null, a rank-independent source is constructed (a vertex which is just kept alive for the
+  // lifetime of vertex that contains this source).
+  // When register_ != null it is likely to be a rank-dependent source, but this will depend on the code inside register_.
+  //
+  // rank-independent souces DO NOT bump up the rank of the vertex containing those sources.
+  // rank-depdendent sources DO bump up the rank of the vertex containing thoses sources when required.
+  constructor(origin: Vertex, register_: () => () => void) {
+    if (origin === null) throw new Error("null origin!");
+    this.origin = origin;
+    this.register_ = register_;
+  }
+  origin: Vertex;
+  private register_: () => () => void;
+  private registered = false;
+  private deregister_?: () => void = undefined;
+
+  register(target: Vertex): void {
+    if (!this.registered) {
+      this.registered = true;
+      if (this.register_ !== null) this.deregister_ = this.register_();
+      else {
+        // Note: The use of Vertex.NULL here instead of "target" is not a bug, this is done to create a
+        // rank-independent source. (see note at constructor for more details.). The origin vertex still gets
+        // added target vertex's children for the memory management algorithm.
+        this.origin.increment(Vertex.NULL);
+        target.childrn.push(this.origin);
+        this.deregister_ = () => {
+          this.origin.decrement(Vertex.NULL);
+          for (let i = target.childrn.length - 1; i >= 0; --i) {
+            if (target.childrn[i] === this.origin) {
+              target.childrn.splice(i, 1);
+              break;
+            }
+          }
+        };
+      }
+    }
+  }
+  deregister(): void {
+    if (this.registered) {
+      this.registered = false;
+      if (this.deregister_ !== undefined) this.deregister_();
+    }
+  }
 }
