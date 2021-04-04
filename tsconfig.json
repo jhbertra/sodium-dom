@@ -22,7 +22,7 @@
     "target": "es5"
   },
   "files": [
-    "./src/mod.ts"
+    "./src/index.ts"
   ],
   "exclude": [
     "node_modules",

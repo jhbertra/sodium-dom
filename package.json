@@ -11,8 +11,8 @@
   "bugs": {
     "url": "https://github.com/jhbertra/sodium-dom/issues"
   },
-  "main": "./dist/mod.js",
-  "types": "./dist/mod.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "devDependencies": {
     "@types/node": "^14.14.37",
     "@typescript-eslint/eslint-plugin": "^4.20.0",

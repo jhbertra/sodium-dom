@@ -1,5 +1,5 @@
 import { StreamSink, Unit } from "sodiumjs";
-import { mainWidget } from "../../src/mod";
+import { el, mainWidget, text } from "../../src";
 
 function repeatEvery(ms: number, f: () => void) {
   const go = () => {
@@ -9,7 +9,7 @@ function repeatEvery(ms: number, f: () => void) {
   setTimeout(go, ms);
 }
 
-mainWidget((builder) => {
+mainWidget(() => {
   // Setup state and events
   // Setup a stream of ticks to go off every 100 ms
   const sTick = new StreamSink<Unit>();
@@ -22,7 +22,7 @@ mainWidget((builder) => {
   );
 
   // Build UI
-  builder.text("Hello, world!");
-  builder.el("br");
-  builder.text(cText);
+  text("Hello, world!");
+  el("br");
+  text(cText);
 });
