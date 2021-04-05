@@ -7,5 +7,6 @@ export {
   el,
   mainWidget,
   renderWidget,
+  switchW,
   text,
 } from "./document";
