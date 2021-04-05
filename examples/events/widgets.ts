@@ -7,8 +7,8 @@ export function controlsWidget(cCount: Cell<number>): Widget<Stream<number>> {
     text(cCount.map((count) => `Current value: ${count}`));
     const [addBtn] = el("button", { type: "button" }, () => text("+"));
 
-    const sSub = subBtn.events("click").mapTo(-1);
-    const sAdd = addBtn.events("click").mapTo(1);
+    const sSub = subBtn("click").mapTo(-1);
+    const sAdd = addBtn("click").mapTo(1);
 
     return sSub.orElse(sAdd);
   };
@@ -21,7 +21,7 @@ const switchWidget: Widget<Cell<boolean>> = () => {
       cOn.map<string>((on) => (on ? "disable" : "enable")),
     ),
   );
-  cOn.loop(onBtn.events("click").accum<boolean>(true, (_, b) => !b));
+  cOn.loop(onBtn("click").accum<boolean>(true, (_, b) => !b));
   return cOn;
 };
 

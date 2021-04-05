@@ -10,8 +10,8 @@ function pagerWidget(cWidget: Cell<number>): Widget<Stream<number>> {
     text(cWidget.map((count) => `Widget: ${count + 1}`));
     const [nextBtn] = el("button", { type: "button" }, () => text("next >"));
 
-    const sPrev = prevBtn.events("click").mapTo(-1);
-    const sNext = nextBtn.events("click").mapTo(1);
+    const sPrev = prevBtn("click").mapTo(-1);
+    const sNext = nextBtn("click").mapTo(1);
 
     return sPrev.orElse(sNext);
   };

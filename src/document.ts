@@ -31,11 +31,6 @@ export interface DomEvents {
   >;
 }
 
-export interface El {
-  readonly element: HTMLElement;
-  readonly events: DomEvents;
-}
-
 /**
  * A "widget" is just a parameterless function that returns some result, where
  * the following rules apply:
@@ -93,7 +88,7 @@ export function text(value: string | Cell<string>): Unit {
  *
  * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
  */
-export function el(tagName: string): El;
+export function el(tagName: string): [DomEvents, Unit];
 
 /**
  * Appends an element node to the current document element with a className.
@@ -103,7 +98,10 @@ export function el(tagName: string): El;
  * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
  * @param className the class name(s) to add to the element. Can be a static or dynamic value.
  */
-export function el(tagName: string, className: string | Cell<string>): El;
+export function el(
+  tagName: string,
+  className: string | Cell<string>,
+): [DomEvents, Unit];
 
 /**
  * Appends an element node to the current document element with a set of attributes.
@@ -113,7 +111,7 @@ export function el(tagName: string, className: string | Cell<string>): El;
  * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
  * @param attributes a map of name / value attributes to add to the element. The valyes can be static or dynamic values.
  */
-export function el(tagName: string, attributes: Attributes): El;
+export function el(tagName: string, attributes: Attributes): [DomEvents, Unit];
 
 /**
  * Appends an element node to the current document element containing a child widget.
@@ -123,7 +121,7 @@ export function el(tagName: string, attributes: Attributes): El;
  * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
  * @param children a child widget to render inside this element.
  */
-export function el<T>(tagName: string, children: Widget<T>): [El, T];
+export function el<T>(tagName: string, children: Widget<T>): [DomEvents, T];
 
 /**
  * Appends an element node with a class name to the current document element containing a child widget.
@@ -138,7 +136,7 @@ export function el<T>(
   tagName: string,
   className: string | Cell<string>,
   children: Widget<T>,
-): [El, T];
+): [DomEvents, T];
 
 /**
  * Appends an element node to the current document element with a set of attributes containing a child widget.
@@ -153,12 +151,12 @@ export function el<T>(
   tagName: string,
   attributes: Attributes,
   children: Widget<T>,
-): [El, T];
+): [DomEvents, T];
 export function el<T>(
   tagName: string,
   arg2?: Attributes | string | Cell<string> | Widget<T>,
   children?: Widget<T>,
-): El | [El, T] {
+): [DomEvents, T] {
   const attr: Attributes =
     typeof arg2 === "function" || arg2 === undefined
       ? {}
@@ -170,10 +168,10 @@ export function el<T>(
     builder.el(
       tagName,
       attr,
-      childrenLocal ?? (() => (undefined as unknown) as T),
+      childrenLocal ?? (() => (Unit.UNIT as unknown) as T),
     ),
   );
-  return childrenLocal ? [el, result] : el;
+  return [el, result];
 }
 
 /**
@@ -204,7 +202,7 @@ function withCurrentBuilder<T>(
 
 interface DomBuilder<E = HTMLElement> {
   dispose: () => Unit;
-  el<T>(tag: string, attr: Attributes, children?: Widget<T>): [El, T];
+  el<T>(tag: string, attr: Attributes, children?: Widget<T>): [DomEvents, T];
   text(text: string | Cell<string>): Unit;
   switchW<T>(cWidget: Cell<Widget<T>>): Widget<Cell<T>>;
   root: E;
@@ -278,8 +276,8 @@ function DomBuilder(root: HTMLElement): DomBuilder {
       return Unit.UNIT;
     },
 
-    el<T>(tag: string, attr: Attributes, children: Widget<T>): [El, T] {
-      return append<HTMLElement, [El, T]>(
+    el<T>(tag: string, attr: Attributes, children: Widget<T>): [DomEvents, T] {
+      return append<HTMLElement, [DomEvents, T]>(
         () => document.createElement(tag),
         (element) => {
           for (const key of Object.keys(attr)) {
@@ -324,11 +322,7 @@ function DomBuilder(root: HTMLElement): DomBuilder {
             }
             return stream;
           };
-          const el: El = {
-            element,
-            events,
-          };
-          return [[el, childrenResult], childrenBuilder.dispose];
+          return [[events, childrenResult], childrenBuilder.dispose];
         },
       );
     },
