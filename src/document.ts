@@ -63,9 +63,10 @@ export function renderWidget(
   rootElement: HTMLElement,
   widget: Widget<void>,
 ): void {
-  return Transaction.run(() => {
-    return renderWidgetInternal(DomBuilder(rootElement), widget);
-  });
+  if (!Transaction.currentTransaction) {
+    throw new Error("renderWidget must be called in a Sodium transaction");
+  }
+  return renderWidgetInternal(DomBuilder(rootElement), widget);
 }
 
 // UI Primatives

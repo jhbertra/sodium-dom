@@ -1,4 +1,5 @@
+import { Transaction } from "sodiumjs";
 import { mainWidget } from "../../src";
 import { appWidget } from "./widgets";
 
-mainWidget(appWidget);
+Transaction.run(() => mainWidget(appWidget));

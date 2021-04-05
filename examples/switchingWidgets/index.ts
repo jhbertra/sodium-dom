@@ -1,4 +1,4 @@
-import { Cell, CellLoop, lambda1, Stream } from "sodiumjs";
+import { Cell, CellLoop, lambda1, Stream, Transaction } from "sodiumjs";
 import { el, mainWidget, switchW, text, Widget } from "../../src";
 import { controlsWidget } from "../events/widgets";
 
@@ -66,4 +66,4 @@ const appWidget: Widget<void> = () => {
   cCount.loop(Cell.switchS(csDelta).accum(0, (a, b) => a + b));
 };
 
-mainWidget(appWidget);
+Transaction.run(() => mainWidget(appWidget));
