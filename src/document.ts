@@ -188,6 +188,22 @@ export function switchW<T>(cWidget: Cell<Widget<T>>): Widget<Cell<T>> {
   return withCurrentBuilder("switchW", (builder) => builder.switchW(cWidget));
 }
 
+// Convenience functions
+
+/**
+ * Produce a widget from a stream of widgets. The last widget fired by the stream will be held. The initial widget
+ * provided will be shown until the stream fires. The result of the resulting widget will change when sWidget changes.
+ *
+ * @param initial the initial widget to display. Its results will be the initial value of the resulting widget's Cell result.
+ * @param sWidget a stream of widgets.
+ */
+export function holdW<T>(
+  initial: Widget<T>,
+  sWidget: Stream<Widget<T>>,
+): Widget<Cell<T>> {
+  return switchW(sWidget.hold(initial));
+}
+
 // Internal API
 
 const InternalStaticState = {
@@ -339,10 +355,10 @@ function DomBuilder(): DomBuilder {
       return [events, childrenResult];
     },
 
-    switchW<T>(cWidget: Cell<Widget<T>>): Widget<Cell<T>> {
+    switchW(cWidget) {
       return () => {
         // Because this will be run as a widget, the current builder may not be this one.
-        const currentBuilder = InternalStaticState.currentBuilder ?? this;
+        const currentBuilder = InternalStaticState.currentBuilder ?? builder;
         const cResultXBuilder = cWidget.map((widget) => {
           const widgetBuilder = DomBuilder();
           return [
