@@ -66,7 +66,12 @@ export function renderWidget(
   if (!Transaction.currentTransaction) {
     throw new Error("renderWidget must be called in a Sodium transaction");
   }
-  return renderWidgetInternal(DomBuilder(rootElement), widget);
+  const builder = DomBuilder();
+  renderWidgetInternal(builder, widget);
+  Transaction.currentTransaction.post(0, () => {
+    const performWork = builder.collectWork();
+    performWork({ rootElement });
+  });
 }
 
 // UI Primatives
@@ -201,178 +206,176 @@ function withCurrentBuilder<T>(
   return run(InternalStaticState.currentBuilder);
 }
 
-interface DomBuilder<E = HTMLElement> {
-  dispose: () => Unit;
-  el<T>(tag: string, attr: Attributes, children?: Widget<T>): [DomEvents, T];
-  text(text: string | Cell<string>): Unit;
-  switchW<T>(cWidget: Cell<Widget<T>>): Widget<Cell<T>>;
-  root: E;
+interface DomBuilderContext<E> {
+  readonly rootElement: E;
 }
 
-function DomBuilder(root: HTMLElement): DomBuilder {
+type UnitOfWork<E> = (ctx: DomBuilderContext<E>) => () => void;
+
+interface DomBuilder<E = HTMLElement> {
+  collectWork(): UnitOfWork<E>;
+  el<T>(tag: string, attr: Attributes, children?: Widget<T>): [DomEvents, T];
+  pushUnitOfWork(unit: UnitOfWork<E>): void;
+  switchW<T>(cWidget: Cell<Widget<T>>): Widget<Cell<T>>;
+  text(text: string | Cell<string>): Unit;
+}
+
+const pass = () => undefined;
+
+function DomBuilder(): DomBuilder {
   // Local state
-  const document = root.ownerDocument;
-  const disposers: (() => void)[] = [];
-  let isDisposed = false;
+  const work: UnitOfWork<HTMLElement>[] = [];
+  let isWorkComplete = false;
 
-  // Private methods
-  function append<T extends Node>(
-    node: () => T,
-    handleNode?: (node: T) => () => void,
-  ): void;
-  function append<T extends Node, A>(
-    node: () => T,
-    handleNode: (node: T) => [A] | [A, () => void],
-  ): A;
-  function append<T extends Node, A>(
-    node: () => T,
-    handleNode?: (node: T) => (() => void) | [A] | [A, () => void],
-  ): A | void {
-    if (isDisposed) {
-      throw new Error("This DOM builder has been disposed");
+  function pushUnitOfWork(unit: UnitOfWork<HTMLElement>) {
+    if (isWorkComplete) {
+      throw new Error("This DOM Builder can no longer be appended to.");
     }
-    const n = node();
-    root.appendChild(n);
-    disposers.push(() => root.removeChild(n));
-
-    if (handleNode) {
-      const handleResult = handleNode(n);
-      const disposer =
-        typeof handleResult === "function" ? handleResult : handleResult[1];
-      if (disposer) {
-        disposers.push(disposer);
-      }
-      if (Array.isArray(handleResult)) {
-        return handleResult[0];
-      }
-    }
+    work.push(unit);
   }
 
-  function bind<T>(value: T | Cell<T>, doBind: (v: T) => void) {
+  function bind<T>(value: T | Cell<T>, doBind: (v: T) => void): () => void {
     if (value instanceof Cell) {
-      Transaction.currentTransaction.post(0, () => {
-        doBind(value.sample());
-      });
-      disposers.push(Operational.updates(value).listen(doBind));
+      doBind(value.sample());
+      return Operational.updates(value).listen(doBind);
     } else {
       doBind(value);
+      return pass;
     }
   }
 
   // Public Methods
   const builder: DomBuilder = {
-    dispose() {
-      for (const disposer of disposers) {
-        disposer();
+    collectWork() {
+      if (isWorkComplete) {
+        throw new Error("Work has already been collected.");
       }
-      isDisposed = true;
-      return Unit.UNIT;
+      isWorkComplete = true;
+      return (ctx) => {
+        const disposers: (() => void)[] = [];
+        for (const unit of work) {
+          disposers.push(unit(ctx));
+        }
+        return () => {
+          for (const dispose of disposers) {
+            dispose();
+          }
+        };
+      };
     },
 
     text(text) {
-      append<Text, void>(
-        () => document.createTextNode(""),
-        (node) => [bind(text, (value) => (node.textContent = value))],
-      );
+      pushUnitOfWork((ctx) => {
+        const node = ctx.rootElement.ownerDocument.createTextNode("");
+        const unbind = bind(text, (value) => (node.textContent = value));
+        ctx.rootElement.appendChild(node);
+        return () => {
+          ctx.rootElement.removeChild(node);
+          unbind();
+        };
+      });
       return Unit.UNIT;
     },
 
     el<T>(tag: string, attr: Attributes, children: Widget<T>): [DomEvents, T] {
-      return append<HTMLElement, [DomEvents, T]>(
-        () => document.createElement(tag),
-        (element) => {
-          for (const key of Object.keys(attr)) {
+      const eventCache: { [key: string]: Stream<Event> } = {};
+      let resolveEl: (element: HTMLElement) => void;
+      const elementPromise = new Promise<HTMLElement>(
+        (resolve) => (resolveEl = resolve),
+      );
+      const events = <T extends keyof HTMLElementEventMap>(
+        event: T,
+      ): Stream<HTMLElementEventMap[T]> => {
+        let stream = eventCache[event];
+        if (!stream) {
+          const sink = new StreamSink<Event>();
+          sink.setVertex__(
+            new Vertex(event, 0, [
+              (new Source(Vertex.NULL, () => {
+                const l: EventListener = (e) => sink.send(e);
+                const addEventListenerPromise = elementPromise.then(
+                  (element) => {
+                    element.addEventListener(event, l);
+                    return element;
+                  },
+                );
+                return () =>
+                  addEventListenerPromise.then((element) =>
+                    element.removeEventListener(event, l),
+                  );
+              }) as unknown) as import("sodiumjs/dist/typings/sodium/Vertex").Source,
+            ]),
+          );
+          stream = sink;
+          eventCache[event] = stream;
+        }
+        return (stream as unknown) as Stream<HTMLElementEventMap[T]>;
+      };
+      const childrenBuilder = DomBuilder();
+      const childrenResult = renderWidgetInternal(childrenBuilder, children);
+      pushUnitOfWork((ctx) => {
+        const element = ctx.rootElement.ownerDocument.createElement(tag);
+        const disposers: (() => void)[] = [];
+        for (const key of Object.keys(attr)) {
+          disposers.push(
             bind(attr[key] as string | Cell<string>, (value) =>
               element.setAttribute(key, value),
-            );
-          }
-          const childrenBuilder = DomBuilder(element);
-          const childrenResult = renderWidgetInternal(
-            childrenBuilder,
-            children,
+            ),
           );
-          const eventCache: {
-            [key in keyof HTMLElementEventMap]?: StreamSink<
-              HTMLElementEventMap[key]
-            >;
-          } = {};
-          const events = <T extends keyof HTMLElementEventMap>(
-            event: T,
-          ): Stream<HTMLElementEventMap[T]> => {
-            let stream = (eventCache[event] as unknown) as StreamSink<
-              HTMLElementEventMap[T]
-            >;
-            if (!stream) {
-              stream = new StreamSink<HTMLElementEventMap[T]>();
-              stream.setVertex__(
-                new Vertex(event, 0, [
-                  (new Source(Vertex.NULL, () => {
-                    if (isDisposed) {
-                      throw new Error(
-                        "This widget has been disposed. You cannot listen to its events anymore.",
-                      );
-                    }
-                    const l: EventListener = (e) =>
-                      stream.send(e as HTMLElementEventMap[T]);
-                    element.addEventListener(event, l);
-                    return () => element.removeEventListener(event, l);
-                  }) as unknown) as import("sodiumjs/dist/typings/sodium/Vertex").Source,
-                ]),
-              );
-              eventCache[event] = (stream as unknown) as typeof eventCache[T];
-            }
-            return stream;
-          };
-          return [[events, childrenResult], childrenBuilder.dispose];
-        },
-      );
+        }
+        const performChildrenWork = childrenBuilder.collectWork();
+        const disposeChildren = performChildrenWork({ rootElement: element });
+        resolveEl(element);
+        ctx.rootElement.appendChild(element);
+        return () => {
+          ctx.rootElement.removeChild(element);
+          disposeChildren();
+          for (const dispose of disposers) {
+            dispose();
+          }
+        };
+      });
+
+      return [events, childrenResult];
     },
 
     switchW<T>(cWidget: Cell<Widget<T>>): Widget<Cell<T>> {
-      if (isDisposed) {
-        throw new Error("This DOM builder has been disposed");
-      }
-
       return () => {
-        const localRoot = InternalStaticState.currentBuilder?.root;
-        let lastHandleResult = null as [DomBuilder, T] | null;
-        let lastWidget = null as Widget<T> | null;
-
-        function handleNewWidget(widget: Widget<T>): [DomBuilder, T] {
-          if (lastHandleResult && lastWidget === widget) {
-            return lastHandleResult;
-          }
-          if (isDisposed) {
-            throw new Error("This DOM builder has been disposed");
-          }
-          if (!localRoot) {
-            throw new Error(
-              "switchW must be run within a widget rendering function.",
-            );
-          }
-
-          const builder = DomBuilder(localRoot);
-          lastHandleResult = [builder, renderWidgetInternal(builder, widget)];
-          lastWidget = widget;
-          return lastHandleResult;
-        }
-
-        const cOut = Operational.updates(cWidget)
-          .accumLazy(
-            cWidget.sampleLazy().map(handleNewWidget),
-            (widget, [builder]) => {
-              builder.dispose();
-              return handleNewWidget(widget);
-            },
-          )
-          .map(([, t]) => t);
-
-        // Add a dumy listener to keep this alive
-        disposers.push(cOut.listen(() => undefined));
-        return cOut;
+        // Because this will be run as a widget, the current builder may not be this one.
+        const currentBuilder = InternalStaticState.currentBuilder ?? this;
+        const cResultXBuilder = cWidget.map((widget) => {
+          const widgetBuilder = DomBuilder();
+          return [
+            widgetBuilder,
+            renderWidgetInternal(widgetBuilder, widget),
+          ] as const;
+        });
+        const cResult = cResultXBuilder.map(([, t]) => t);
+        const cBuilder = cResultXBuilder.map(([builder]) => builder);
+        currentBuilder.pushUnitOfWork(({ rootElement }) => {
+          const cDisposer = cBuilder.map((builder) =>
+            builder.collectWork()({ rootElement }),
+          );
+          let currentDispose = cDisposer.sample();
+          const unlisten = Operational.updates(cDisposer)
+            .snapshot(
+              cDisposer,
+              (dispose, previousDispose) => [previousDispose, dispose] as const,
+            )
+            .listen(([previousDispose, dispose]) => {
+              previousDispose();
+              currentDispose = dispose;
+            });
+          return () => {
+            unlisten();
+            currentDispose();
+          };
+        });
+        return cResult;
       };
     },
-    root,
+
+    pushUnitOfWork,
   };
 
   return builder;
@@ -383,9 +386,6 @@ function renderWidgetInternal<T>(builder: DomBuilder, widget: Widget<T>): T {
   InternalStaticState.currentBuilder = builder;
   try {
     return widget();
-  } catch (e) {
-    builder.dispose();
-    throw e;
   } finally {
     InternalStaticState.currentBuilder = prevBuilder;
   }
