@@ -29,47 +29,66 @@ function unAttribute<T extends AttrT>(
 
 export type Attributes<T extends AttrT = AttrT> = Value<Attribute<T>[]>;
 
+export type TokenListMap = { [token: string]: Value<boolean> };
+
 // Primatives
 
-type IfEquals<X, Y, A, B> = (<T>() => T extends X ? 1 : 2) extends <
-  T
->() => T extends Y ? 1 : 2
-  ? A
-  : B;
-type WritableKeysOf<T> = {
-  [P in keyof T]: IfEquals<
-    { [Q in P]: T[P] },
-    { -readonly [Q in P]: T[P] },
-    P,
-    never
-  >;
-}[keyof T];
-
-type PropNames<T extends AttrT> = WritableKeysOf<HTMLElementTagNameMap[T]>;
-type PropValue<
-  T extends AttrT,
-  P extends PropNames<T>
-> = HTMLElementTagNameMap[T][P];
-
-export function setProperty<T extends AttrT, P extends PropNames<T>>(
-  name: P,
-  value: Value<PropValue<T, P>>,
+export function setProperty<T extends AttrT, A>(
+  name: string,
+  value: Value<A>,
 ): Attribute<T> {
   return Attribute((element) =>
     bindValue(value, (v) => {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       element[name] = v;
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       return () => delete element[name];
     }),
   );
 }
 
-export function className(value: Value<string>): Attribute {
-  return Attribute((element) =>
-    bindValue(value, (v) => {
-      const startingValue = element.className;
-      element.className = startingValue + " " + v;
-      return () => (element.className = startingValue);
-    }),
+export function tokens<T extends AttrT>(
+  name: string,
+  value: Value<string[]>,
+): Attribute<T> {
+  return Attribute((element) => {
+    const tokenList = element[name as keyof HTMLElement] as unknown;
+    if (!(tokenList instanceof DOMTokenList)) {
+      throw new Error(
+        `${name} is not a valid DOMTokenList on element type ${element.tagName}`,
+      );
+    }
+    return bindValue(value, (v) => {
+      const tokens = v
+        .flatMap((t) => t.split(" "))
+        .map((t) => t.trim())
+        .filter((t) => t);
+      tokenList.add(...tokens);
+      return () => tokenList.remove(...tokens);
+    });
+  });
+}
+
+export function tokensList<T extends AttrT>(
+  name: string,
+  listMap: TokenListMap,
+): Attribute<T> {
+  return tokens(
+    name,
+    Cell.liftArray(
+      Object.keys(listMap)
+        // pre-filter any statically disabled tokens
+        .filter((token) => listMap[token])
+        .map((token) =>
+          wrapValue(listMap[token] as Value<boolean>).map(
+            (enabled) => [token, enabled] as const,
+          ),
+        ),
+    ).map((names) =>
+      names.flatMap(([name, enabled]) => (enabled ? [name] : [])),
+    ),
   );
 }
 
@@ -84,16 +103,12 @@ export function style(name: string, value: Value<string>): Attribute {
 
 // Super Common Attributes
 
-export function classList(list: [string, Value<boolean>][]): Attribute {
-  return className(
-    Cell.liftArray(
-      list.map(([className, cEnabled]) =>
-        wrapValue(cEnabled).map((enabled) => [className, enabled] as const),
-      ),
-    ).map((names) =>
-      names.flatMap(([name, enabled]) => (enabled ? [name] : [])).join(" "),
-    ),
-  );
+export function className(value: Value<string[]>): Attribute {
+  return tokens("classList", value);
+}
+
+export function classList(listMap: TokenListMap): Attribute {
+  return tokensList("classList", listMap);
 }
 
 export function id(value: string): Attribute {
@@ -495,27 +510,12 @@ export function srclang(value: Value<string>): Attribute<"track"> {
 
 // iframes
 
-export function sandbox(list: [string, Value<boolean>][]): Attribute<"iframe"> {
-  const value = Cell.liftArray(
-    list.map(([permission, cEnabled]) =>
-      wrapValue(cEnabled).map((enabled) => [permission, enabled] as const),
-    ),
-  ).map((names) =>
-    names.flatMap(([permission, enabled]) => (enabled ? [permission] : [])),
-  );
-  return Attribute((element) =>
-    bindValue(value, (v) => {
-      const toAdd = v.filter((p) => !element.sandbox.contains(p));
-      for (const p of toAdd) {
-        element.sandbox.add(p);
-      }
-      return () => {
-        for (const p of toAdd) {
-          element.sandbox.remove(p);
-        }
-      };
-    }),
-  );
+export function sandbox(value: Value<string[]>): Attribute<"iframe"> {
+  return tokens("sandbox", value);
+}
+
+export function sandboxList(listMap: TokenListMap): Attribute<"iframe"> {
+  return tokensList("sandbox", listMap);
 }
 
 export function srcdoc(value: Value<string>): Attribute<"iframe"> {
