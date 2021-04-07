@@ -1,5 +1,14 @@
 import { StreamSink, Transaction, Unit } from "sodiumjs";
-import { el, mainWidget, text } from "../../src";
+import {
+  Attribute,
+  el,
+  height,
+  id,
+  mainWidget,
+  src,
+  style,
+  text,
+} from "../../src/document";
 
 function repeatEvery(ms: number, f: () => void) {
   const go = () => {
@@ -18,9 +27,9 @@ function codeBlock(code: string): void {
       break;
     }
   }
-  el("p", () => {
-    el("pre", () => {
-      el("code", () => {
+  el("p", [], () => {
+    el("pre", [], () => {
+      el("code", [], () => {
         text(
           code
             .trim()
@@ -37,7 +46,20 @@ const images = [
   "https://s.abcnews.com/images/Entertainment/abc_ann_wtb_orange_111101_wg.jpg",
 ];
 
-const classes = ["error", "info", "success"];
+const attributes = [
+  [
+    style("width", "200px"),
+    style("height", "200px"),
+    style("background-color", "red"),
+  ] as Attribute<"div">[],
+  [
+    id("box"),
+    style("width", "200px"),
+    style("height", "200px"),
+    style("border", "1px solid black"),
+    style("box-sizing", "border-box"),
+  ] as Attribute<"div">[],
+];
 
 Transaction.run(() =>
   mainWidget(() => {
@@ -47,134 +69,97 @@ Transaction.run(() =>
     repeatEvery(1000, () => sTick.send(Unit.UNIT));
 
     // Build UI
-    el("header", () => {
-      el("h1", () => text("Building Elements"));
-      el("p", () => text("In Sodium DOM"));
+    el("header", [], () => {
+      el("h1", [], () => text("Building Elements"));
+      el("p", [], () => text("In Sodium DOM"));
     });
 
-    el("article", () => {
-      el("h2", () => text("Creating elements"));
-      el("p", () => {
+    el("article", [], () => {
+      el("h2", [], () => text("Creating elements"));
+      el("p", [], () => {
         text("The primary API for creating elements in Sodium DOM is the ");
-        el("code", () => text("DomBuilder#el"));
+        el("code", [], () => text("DomBuilder#el"));
         text(" method. It accepts 3 arguments. The first argument ");
         text("is mandatory, and is the name of the HTML tag to render.");
       });
 
       codeBlock(`
-      mainWidget(() => el("div"));
-    `);
-      el("p", () => {
+        mainWidget(() => el("div"));
+      `);
+      el("p", [], () => {
         text("Produces the following HTML document:");
       });
       codeBlock(`
-      <html>
-        <body>
-          <div></div>
-        </body>
-      </html>
-    `);
+        <html>
+          <body>
+            <div></div>
+          </body>
+        </html>
+      `);
 
-      el("h2", () => text("Passing Attributes"));
+      el("h2", [], () => text("Passing Attributes"));
 
-      el("p", () => {
+      el("p", [], () => {
         text(
-          "You can pass attributes for the element via the second argument as a dictionary.",
+          "You can pass attributes for the element via the second argument as an array.",
         );
       });
       codeBlock(`
-      mainWidget(() => el("img", { src: "https://i.imgur.com/YELw3fU.jpg" });
-    `);
-      el("img", { src: "https://i.imgur.com/YELw3fU.jpg" });
+        mainWidget(() => el("img", [src("https://i.imgur.com/YELw3fU.jpg")]);
+      `);
+      el("img", [src("https://i.imgur.com/YELw3fU.jpg")]);
 
-      el("p", () => {
+      el("p", [], () => {
         text(
           "The attribute values need not be static values! They can be Sodium Cells which change over time.",
         );
       });
       codeBlock(`
-      declare const cImgSrc: Cell<string>;
-      mainWidget(() => el("img", { height: "250px", src: cImgSrc });
-    `);
+        declare const cImgSrc: Cell<string>;
+        mainWidget(() => el("img", [height(250), src(cImgSrc)]));
+      `);
       const cImgSrc = sTick
         .accum(0, (_, i) => (i + 1) % images.length)
         .map((i) => images[i] as string);
-      el("img", { height: "250px", src: cImgSrc });
+      el("img", [height(250), src(cImgSrc)]);
 
-      el("h2", () => text("Class name shorthand"));
-
-      el("p", () => {
+      el("p", [], () => {
         text(
-          "As a shorthand, you can pass a string instead of an object to be the class of the elemet",
+          "The attributes themselves can also be dynamic - so the attributes for an element can change over type",
         );
       });
       codeBlock(`
-      mainWidget(() => {
-        el("style", { type: "text/css" }, () => {
-          text("span.error {");
-          text("  color: red;");
-          text("}");
-          text("span.info {");
-          text("  color: blue;");
-          text("}");
-          text("span.success {");
-          text("  color: green;");
-          text("}");
-        });
-        el("span", "error", () => text("I am an error!"));
-      });
-    `);
-      el("style", { type: "text/css" }, () => {
-        text("body {");
-        text("  max-width: 480px;");
-        text("}");
-        text("span.error {");
-        text("  color: red;");
-        text("}");
-        text("span.info {");
-        text("  color: blue;");
-        text("}");
-        text("span.success {");
-        text("  color: green;");
-        text("}");
-      });
-      el("span", "error", () => text("I am an error!"));
+        declare const cAttr: Attributes<"div">;
+        mainWidget(() => el("div", cAttr));
+      `);
+      const cAttr = sTick
+        .accum(0, (_, i) => (i + 1) % attributes.length)
+        .map((i) => attributes[i] as Attribute<"div">[]);
+      el("div", cAttr);
 
-      el("p", () => {
-        text("The class can, of course, also be a Cell");
-      });
-      codeBlock(`
-      declare const cClass: Cell<string>;
-      mainWidget(() => el("span",  cClass, () => text("error!")));
-    `);
-      const cClass = sTick
-        .accum(0, (_, i) => (i + 1) % classes.length)
-        .map((i) => classes[i] as string);
-      el("span", cClass, () => text("I don't know what I am."));
+      el("h2", [], () => text("Passing Children"));
 
-      el("h2", () => text("Passing Children"));
-
-      el("p", () => {
+      el("p", [], () => {
         text("There are examples of this above (because it's almost ");
         text("impossible to avoid), but you can nest elements in other ");
         text("elements. The child widget can be passed as the second ");
         text("argument, or the thrid, after the attributes / class.");
       });
       codeBlock(`
-      mainWidget(() => {
-        el("ul", { style: "border: solid black 1px" }, () => {
-          el("li", () => text("item 1"));
-          el("li", () => text("item 2"));
-          el("li", () => text("item 3"));
-          el("li", () => text("item 4"));
+        mainWidget(() => {
+          el("ul", [style("border", "solid black 1px")], () => {
+            el("li", [], () => text("item 1"));
+            el("li", [], () => text("item 2"));
+            el("li", [], () => text("item 3"));
+            el("li", [], () => text("item 4"));
+          });
         });
-      });
-    `);
-      el("ul", { style: "border: solid black 1px" }, () => {
-        el("li", () => text("item 1"));
-        el("li", () => text("item 2"));
-        el("li", () => text("item 3"));
-        el("li", () => text("item 4"));
+      `);
+      el("ul", [style("border", "solid black 1px")], () => {
+        el("li", [], () => text("item 1"));
+        el("li", [], () => text("item 2"));
+        el("li", [], () => text("item 3"));
+        el("li", [], () => text("item 4"));
       });
 
       text("You might be wondering if children can be FRP values too. ");

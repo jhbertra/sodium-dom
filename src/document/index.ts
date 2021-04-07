@@ -1,26 +1,93 @@
-import {
-  Cell,
-  Operational,
-  Stream,
-  StreamSink,
-  Transaction,
-  Unit,
-  Vertex,
-} from "sodiumjs";
+import { Cell, Operational, Stream, Transaction, Unit } from "sodiumjs";
+import { streamSource } from "../utils";
+
+import { Attributes, bindAttributes } from "./attributes";
+
+export {
+  Attribute,
+  Attributes,
+  accept,
+  acceptCharset,
+  accessKey,
+  action,
+  align,
+  alt,
+  autocomplete,
+  autofocus,
+  autoplay,
+  checked,
+  cite,
+  classList,
+  className,
+  colSpan,
+  cols,
+  contentEditable,
+  controls,
+  coords,
+  dateTime,
+  default_,
+  dir,
+  disabled,
+  download,
+  draggable,
+  enctype,
+  headers,
+  height,
+  hidden,
+  href,
+  hreflang,
+  htmlFor,
+  id,
+  isMap,
+  kind,
+  lang,
+  loop,
+  max,
+  maxLength,
+  media,
+  method,
+  min,
+  minLength,
+  multiple,
+  name,
+  novalidate,
+  pattern,
+  ping,
+  placeholder,
+  poster,
+  preload,
+  readonly,
+  rel,
+  required,
+  reversed,
+  rows,
+  rowspan,
+  sandbox,
+  scope,
+  selected,
+  setProperty,
+  shape,
+  size,
+  spellcheck,
+  src,
+  srcdoc,
+  srclang,
+  start,
+  step,
+  style,
+  tabIndex,
+  target,
+  title,
+  type,
+  useMap,
+  value,
+  width,
+  wrap,
+} from "./attributes";
 
 // Public API
 
 // Types
-
-/**
- * An attribute value can either be a static or a dynamic string.
- */
-export type AttributeValue = string | Cell<string>;
-
-/**
- * A map of attribute names to values.
- */
-export type Attributes = Record<string, AttributeValue>;
 
 /**
  * A record containing the set of events available for each DOM element.
@@ -76,6 +143,8 @@ export function renderWidget(
 
 // UI Primatives
 
+type Tag = keyof HTMLElementTagNameMap;
+
 /**
  * Appends a text node to the current document element.
  *
@@ -94,20 +163,7 @@ export function text(value: string | Cell<string>): Unit {
  *
  * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
  */
-export function el(tagName: string): [DomEvents, Unit];
-
-/**
- * Appends an element node to the current document element with a className.
- *
- * WARNING - must be called witin a widget.
- *
- * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
- * @param className the class name(s) to add to the element. Can be a static or dynamic value.
- */
-export function el(
-  tagName: string,
-  className: string | Cell<string>,
-): [DomEvents, Unit];
+export function el<T extends Tag>(tagName: T): [DomEvents, Unit];
 
 /**
  * Appends an element node to the current document element with a set of attributes.
@@ -117,32 +173,10 @@ export function el(
  * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
  * @param attributes a map of name / value attributes to add to the element. The valyes can be static or dynamic values.
  */
-export function el(tagName: string, attributes: Attributes): [DomEvents, Unit];
-
-/**
- * Appends an element node to the current document element containing a child widget.
- *
- * WARNING - must be called witin a widget.
- *
- * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
- * @param children a child widget to render inside this element.
- */
-export function el<T>(tagName: string, children: Widget<T>): [DomEvents, T];
-
-/**
- * Appends an element node with a class name to the current document element containing a child widget.
- *
- * WARNING - must be called witin a widget.
- *
- * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
- * @param className the class name(s) to add to the element. Can be a static or dynamic value.
- * @param children a child widget to render inside this element.
- */
-export function el<T>(
+export function el<T extends Tag>(
   tagName: string,
-  className: string | Cell<string>,
-  children: Widget<T>,
-): [DomEvents, T];
+  attributes: Attributes<T>,
+): [DomEvents, Unit];
 
 /**
  * Appends an element node to the current document element with a set of attributes containing a child widget.
@@ -153,31 +187,19 @@ export function el<T>(
  * @param attributes a map of name / value attributes to add to the element. The valyes can be static or dynamic values.
  * @param children a child widget to render inside this element.
  */
-export function el<T>(
-  tagName: string,
-  attributes: Attributes,
-  children: Widget<T>,
-): [DomEvents, T];
-export function el<T>(
-  tagName: string,
-  arg2?: Attributes | string | Cell<string> | Widget<T>,
-  children?: Widget<T>,
-): [DomEvents, T] {
-  const attr: Attributes =
-    typeof arg2 === "function" || arg2 === undefined
-      ? {}
-      : typeof arg2 === "string" || arg2 instanceof Cell
-      ? { class: arg2 }
-      : arg2;
-  const childrenLocal = typeof arg2 === "function" ? arg2 : children;
-  const [el, result] = withCurrentBuilder("el", (builder) =>
-    builder.el(
-      tagName,
-      attr,
-      childrenLocal ?? (() => (Unit.UNIT as unknown) as T),
-    ),
+export function el<T extends Tag, A>(
+  tagName: T,
+  attributes: Attributes<T>,
+  children: Widget<A>,
+): [DomEvents, A];
+export function el<T extends Tag, A>(
+  tagName: T,
+  attributes?: Attributes<T>,
+  children?: Widget<A>,
+): [DomEvents, A] {
+  return withCurrentBuilder("el", (builder) =>
+    builder.el(tagName, attributes ?? [], children),
   );
-  return [el, result];
 }
 
 /**
@@ -230,7 +252,11 @@ type UnitOfWork<E> = (ctx: DomBuilderContext<E>) => () => void;
 
 interface DomBuilder<E = HTMLElement> {
   collectWork(): UnitOfWork<E>;
-  el<T>(tag: string, attr: Attributes, children?: Widget<T>): [DomEvents, T];
+  el<T extends Tag, A>(
+    tag: T,
+    attr: Attributes<T>,
+    children?: Widget<A>,
+  ): [DomEvents, A];
   pushUnitOfWork(unit: UnitOfWork<E>): void;
   switchW<T>(cWidget: Cell<Widget<T>>): Widget<Cell<T>>;
   text(text: string | Cell<string>): Unit;
@@ -293,59 +319,45 @@ function DomBuilder(): DomBuilder {
       return Unit.UNIT;
     },
 
-    el<T>(tag: string, attr: Attributes, children: Widget<T>): [DomEvents, T] {
-      const eventCache: { [key: string]: Stream<Event> } = {};
+    el<T extends Tag, A>(
+      tag: T,
+      attr: Attributes<T>,
+      children?: Widget<A>,
+    ): [DomEvents, A] {
       let resolveEl: (element: HTMLElement) => void;
       const elementPromise = new Promise<HTMLElement>(
         (resolve) => (resolveEl = resolve),
       );
       const events = <T extends keyof HTMLElementEventMap>(
         event: T,
-      ): Stream<HTMLElementEventMap[T]> => {
-        let stream = eventCache[event];
-        if (!stream) {
-          const sink = new StreamSink<Event>();
-          sink.setVertex__(
-            new Vertex(event, 0, [
-              (new Source(Vertex.NULL, () => {
-                const l: EventListener = (e) => sink.send(e);
-                const addEventListenerPromise = elementPromise.then(
-                  (element) => {
-                    element.addEventListener(event, l);
-                    return element;
-                  },
-                );
-                return () =>
-                  addEventListenerPromise.then((element) =>
-                    element.removeEventListener(event, l),
-                  );
-              }) as unknown) as import("sodiumjs/dist/typings/sodium/Vertex").Source,
-            ]),
-          );
-          stream = sink;
-          eventCache[event] = stream;
-        }
-        return (stream as unknown) as Stream<HTMLElementEventMap[T]>;
-      };
-      const childrenBuilder = DomBuilder();
-      const childrenResult = renderWidgetInternal(childrenBuilder, children);
+      ): Stream<HTMLElementEventMap[T]> =>
+        streamSource(event, (send) => {
+          const addEventListenerPromise = elementPromise.then((element) => {
+            element.addEventListener(event, send);
+            return element;
+          });
+          return () =>
+            addEventListenerPromise.then((element) =>
+              element.removeEventListener(event, send),
+            );
+        });
+      const childrenBuilder = children && DomBuilder();
+      const childrenResult =
+        children && childrenBuilder
+          ? renderWidgetInternal(childrenBuilder, children)
+          : (Unit.UNIT as A);
       pushUnitOfWork((ctx) => {
         const element = ctx.rootElement.ownerDocument.createElement(tag);
         const disposers: (() => void)[] = [];
-        for (const key of Object.keys(attr)) {
-          disposers.push(
-            bind(attr[key] as string | Cell<string>, (value) =>
-              element.setAttribute(key, value),
-            ),
-          );
-        }
-        const performChildrenWork = childrenBuilder.collectWork();
-        const disposeChildren = performChildrenWork({ rootElement: element });
+        const disposeAttributes = bindAttributes(element, attr);
+        const performChildrenWork = childrenBuilder?.collectWork();
+        const disposeChildren = performChildrenWork?.({ rootElement: element });
         resolveEl(element);
         ctx.rootElement.appendChild(element);
         return () => {
           ctx.rootElement.removeChild(element);
-          disposeChildren();
+          disposeChildren?.();
+          disposeAttributes();
           for (const dispose of disposers) {
             dispose();
           }
@@ -404,60 +416,5 @@ function renderWidgetInternal<T>(builder: DomBuilder, widget: Widget<T>): T {
     return widget();
   } finally {
     InternalStaticState.currentBuilder = prevBuilder;
-  }
-}
-
-// TODO OBVIOUSLY This should not live here!!! This is copy-pasted from
-// sodium-typescript, which does not export Source. It definitely should, as it
-// is part of the public API. Exporting Vertex constructors without exporting
-// Source makes no sense. This needs to be fixed in a PR.
-//
-// For now, we are lucky enough that this class doesn't depend on any module
-// state in Vertex... or we'd be really hooped.
-class Source {
-  // Note:
-  // When register_ == null, a rank-independent source is constructed (a vertex which is just kept alive for the
-  // lifetime of vertex that contains this source).
-  // When register_ != null it is likely to be a rank-dependent source, but this will depend on the code inside register_.
-  //
-  // rank-independent souces DO NOT bump up the rank of the vertex containing those sources.
-  // rank-depdendent sources DO bump up the rank of the vertex containing thoses sources when required.
-  constructor(origin: Vertex, register_: () => () => void) {
-    if (origin === null) throw new Error("null origin!");
-    this.origin = origin;
-    this.register_ = register_;
-  }
-  origin: Vertex;
-  private register_: () => () => void;
-  private registered = false;
-  private deregister_?: () => void = undefined;
-
-  register(target: Vertex): void {
-    if (!this.registered) {
-      this.registered = true;
-      if (this.register_ !== null) this.deregister_ = this.register_();
-      else {
-        // Note: The use of Vertex.NULL here instead of "target" is not a bug, this is done to create a
-        // rank-independent source. (see note at constructor for more details.). The origin vertex still gets
-        // added target vertex's children for the memory management algorithm.
-        this.origin.increment(Vertex.NULL);
-        target.childrn.push(this.origin);
-        this.deregister_ = () => {
-          this.origin.decrement(Vertex.NULL);
-          for (let i = target.childrn.length - 1; i >= 0; --i) {
-            if (target.childrn[i] === this.origin) {
-              target.childrn.splice(i, 1);
-              break;
-            }
-          }
-        };
-      }
-    }
-  }
-  deregister(): void {
-    if (this.registered) {
-      this.registered = false;
-      if (this.deregister_ !== undefined) this.deregister_();
-    }
   }
 }
