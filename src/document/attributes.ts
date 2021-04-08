@@ -1,39 +1,38 @@
 import { Cell } from "sodiumjs";
 import { bindValue, wrapValue, CleanupTask, SetupTask, Value } from "../utils";
+import { Element, Tag } from "./core";
 
 // Model
 
-type AttrT = keyof HTMLElementTagNameMap;
-
-type AttributeInternal<T extends AttrT> = SetupTask<HTMLElementTagNameMap[T]>;
+type AttributeInternal<T extends Tag> = SetupTask<Element<T>>;
 
 declare const attributeSym: unique symbol;
-export interface Attribute<T extends AttrT = AttrT> {
+export interface Attribute<T extends Tag = Tag> {
   "COMPILE TIME ONLY DO NOT USE IT WILL BE UNDEFINED": {
     identity: typeof attributeSym;
     T: T;
   };
 }
 
-function Attribute<T extends AttrT>(
+function Attribute<T extends Tag>(
   attribute: AttributeInternal<T>,
 ): Attribute<T> {
   return (attribute as unknown) as Attribute<T>;
 }
 
-function unAttribute<T extends AttrT>(
+function unAttribute<T extends Tag>(
   attribute: Attribute<T>,
 ): AttributeInternal<T> {
   return (attribute as unknown) as AttributeInternal<T>;
 }
 
-export type Attributes<T extends AttrT = AttrT> = Value<Attribute<T>[]>;
+export type Attributes<T extends Tag = Tag> = Value<Attribute<T>[]>;
 
 export type TokenListMap = { [token: string]: Value<boolean> };
 
 // Primatives
 
-export function setProperty<T extends AttrT, A>(
+export function setProperty<T extends Tag, A>(
   name: string,
   value: Value<A>,
 ): Attribute<T> {
@@ -42,14 +41,16 @@ export function setProperty<T extends AttrT, A>(
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore
       element[name] = v;
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      return () => delete element[name];
+      return () => {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        delete element[name];
+      };
     }),
   );
 }
 
-export function tokens<T extends AttrT>(
+export function tokens<T extends Tag>(
   name: string,
   value: Value<string[]>,
 ): Attribute<T> {
@@ -71,7 +72,7 @@ export function tokens<T extends AttrT>(
   });
 }
 
-export function tokensList<T extends AttrT>(
+export function tokensList<T extends Tag>(
   name: string,
   listMap: TokenListMap,
 ): Attribute<T> {
@@ -141,7 +142,7 @@ type HasType =
   | "style"
   | "ul";
 
-export function type(value: Value<string>): Attribute<HasType> {
+export function type<T extends HasType>(value: Value<string>): Attribute<T> {
   return setProperty("type", value);
 }
 
@@ -159,31 +160,39 @@ type HasValue =
   | "select"
   | "textarea";
 
-export function value(value: Value<string>): Attribute<HasValue> {
+export function value<T extends HasValue>(value: Value<string>): Attribute<T> {
   return setProperty("value", value);
 }
 
 type HasChecked = "form" | "input";
 
-export function checked(value: Value<boolean>): Attribute<HasChecked> {
+export function checked<T extends HasChecked>(
+  value: Value<boolean>,
+): Attribute<T> {
   return setProperty("checked", value);
 }
 
 type HasPlaceholder = "form" | "input" | "textarea";
 
-export function placeholder(value: Value<string>): Attribute<HasPlaceholder> {
+export function placeholder<T extends HasPlaceholder>(
+  value: Value<string>,
+): Attribute<T> {
   return setProperty("placeholder", value);
 }
 
 type HasSelected = "form" | "option";
 
-export function selected(value: Value<boolean>): Attribute<HasSelected> {
+export function selected<T extends HasSelected>(
+  value: Value<boolean>,
+): Attribute<T> {
   return setProperty("selected", value);
 }
 
 type HasAccept = "form" | "input";
 
-export function accept(value: Value<string>): Attribute<HasAccept> {
+export function accept<T extends HasAccept>(
+  value: Value<string>,
+): Attribute<T> {
   return setProperty("accept", value);
 }
 
@@ -197,7 +206,9 @@ export function action(value: Value<string>): Attribute<"form"> {
 
 type HasAutocomplete = "form" | "input" | "select" | "textarea";
 
-export function autocomplete(value: Value<string>): Attribute<HasAutocomplete> {
+export function autocomplete<T extends HasAutocomplete>(
+  value: Value<string>,
+): Attribute<T> {
   return setProperty("autocomplete", value);
 }
 
@@ -216,7 +227,9 @@ type HasDisabled =
   | "select"
   | "textarea";
 
-export function disabled(value: Value<boolean>): Attribute<HasDisabled> {
+export function disabled<T extends HasDisabled>(
+  value: Value<boolean>,
+): Attribute<T> {
   return setProperty("disabled", value);
 }
 
@@ -226,13 +239,17 @@ export function enctype(value: Value<string>): Attribute<"form"> {
 
 type HasMaxlength = "form" | "input" | "textarea";
 
-export function maxLength(value: Value<number>): Attribute<HasMaxlength> {
+export function maxLength<T extends HasMaxlength>(
+  value: Value<number>,
+): Attribute<T> {
   return setProperty("maxLength", value);
 }
 
 type HasMinlength = "form" | "input" | "textarea";
 
-export function minLength(value: Value<number>): Attribute<HasMinlength> {
+export function minLength<T extends HasMinlength>(
+  value: Value<number>,
+): Attribute<T> {
   return setProperty("minLength", value);
 }
 
@@ -242,7 +259,9 @@ export function method(value: Value<"GET" | "POST">): Attribute<"form"> {
 
 type HasMultiple = "form" | "input" | "select";
 
-export function multiple(value: Value<boolean>): Attribute<HasMultiple> {
+export function multiple<T extends HasMultiple>(
+  value: Value<boolean>,
+): Attribute<T> {
   return setProperty("multiple", value);
 }
 
@@ -266,7 +285,7 @@ type HasName =
   | "slot"
   | "textarea";
 
-export function name(value: Value<string>): Attribute<HasName> {
+export function name<T extends HasName>(value: Value<string>): Attribute<T> {
   return setProperty("name", value);
 }
 
@@ -276,7 +295,9 @@ export function novalidate(value: Value<boolean>): Attribute<"form"> {
 
 type HasPattern = "form" | "input";
 
-export function pattern(value: Value<string>): Attribute<HasPattern> {
+export function pattern<T extends HasPattern>(
+  value: Value<string>,
+): Attribute<T> {
   return setProperty("pattern", value);
 }
 
@@ -286,13 +307,15 @@ export function readonly(value: Value<boolean>): Attribute<"form"> {
 
 type HasRequired = "form" | "input" | "select" | "textarea";
 
-export function required(value: Value<boolean>): Attribute<HasRequired> {
+export function required<T extends HasRequired>(
+  value: Value<boolean>,
+): Attribute<T> {
   return setProperty("required", value);
 }
 
 type HasSize = "basefont" | "font" | "form" | "hr" | "input" | "select";
 
-export function size(value: Value<number>): Attribute<HasSize> {
+export function size<T extends HasSize>(value: Value<number>): Attribute<T> {
   return setProperty("size", value);
 }
 
@@ -302,37 +325,39 @@ export function htmlFor(value: Value<string>): Attribute<"label"> {
 
 type HasMax = "form" | "input" | "meter" | "progress";
 
-export function max(value: Value<string>): Attribute<HasMax> {
+export function max<T extends HasMax>(value: Value<string>): Attribute<T> {
   return setProperty("max", value);
 }
 
 type HasMin = "form" | "input" | "meter" | "progress";
 
-export function min(value: Value<string>): Attribute<HasMin> {
+export function min<T extends HasMin>(value: Value<string>): Attribute<T> {
   return setProperty("min", value);
 }
 
 type HasStep = "form" | "input" | "meter" | "progress";
 
-export function step(value: Value<string>): Attribute<HasStep> {
+export function step<T extends HasStep>(value: Value<string>): Attribute<T> {
   return setProperty("step", value);
 }
 
 type HasCols = "form" | "frameset" | "textarea";
 
-export function cols(value: Value<number>): Attribute<HasCols> {
+export function cols<T extends HasCols>(value: Value<number>): Attribute<T> {
   return setProperty("cols", value);
 }
 
 type HasRows = "form" | "frameset" | "textarea";
 
-export function rows(value: Value<number>): Attribute<HasRows> {
+export function rows<T extends HasRows>(value: Value<number>): Attribute<T> {
   return setProperty("rows", value);
 }
 
 type HasWrap = "form" | "textarea";
 
-export function wrap(value: Value<"hard" | "soft">): Attribute<HasWrap> {
+export function wrap<T extends HasWrap>(
+  value: Value<"hard" | "soft">,
+): Attribute<T> {
   return setProperty("wrap", value as Value<string>);
 }
 
@@ -340,41 +365,45 @@ export function wrap(value: Value<"hard" | "soft">): Attribute<HasWrap> {
 
 type HasHref = "a" | "area" | "base" | "form" | "link";
 
-export function href(value: Value<string>): Attribute<HasHref> {
+export function href<T extends HasHref>(value: Value<string>): Attribute<T> {
   return setProperty("href", value);
 }
 
-export function target(value: Value<string>): Attribute<HasHref> {
+export function target<T extends HasHref>(value: Value<string>): Attribute<T> {
   return setProperty("target", value);
 }
 
 type HasDownload = "a" | "area" | "form";
 
-export function download(value: Value<string>): Attribute<HasDownload> {
+export function download<T extends HasDownload>(
+  value: Value<string>,
+): Attribute<T> {
   return setProperty("download", value);
 }
 
 type HasHreflang = "a" | "form" | "link";
 
-export function hreflang(value: Value<string>): Attribute<HasHreflang> {
+export function hreflang<T extends HasHreflang>(
+  value: Value<string>,
+): Attribute<T> {
   return setProperty("hreflang", value);
 }
 
 type HasMedia = "form" | "link" | "source" | "style";
 
-export function media(value: Value<string>): Attribute<HasMedia> {
+export function media<T extends HasMedia>(value: Value<string>): Attribute<T> {
   return setProperty("media", value);
 }
 
 type HasPing = "a" | "area" | "form";
 
-export function ping(value: Value<string>): Attribute<HasPing> {
+export function ping<T extends HasPing>(value: Value<string>): Attribute<T> {
   return setProperty("ping", value);
 }
 
 type HasRel = "form" | "a" | "area" | "link";
 
-export function rel(value: Value<string>): Attribute<HasRel> {
+export function rel<T extends HasRel>(value: Value<string>): Attribute<T> {
   return setProperty("rel", value);
 }
 
@@ -382,27 +411,31 @@ export function rel(value: Value<string>): Attribute<HasRel> {
 
 type HasIsmap = "form" | "img";
 
-export function isMap(value: Value<boolean>): Attribute<HasIsmap> {
+export function isMap<T extends HasIsmap>(value: Value<boolean>): Attribute<T> {
   return setProperty("isMap", value);
 }
 
 type HasUsemap = "object" | "form" | "img" | "input";
 
-export function useMap(value: Value<string>): Attribute<HasUsemap> {
+export function useMap<T extends HasUsemap>(
+  value: Value<string>,
+): Attribute<T> {
   return setProperty("useMap", value);
 }
 
 type HasShape = "a" | "area" | "form";
 
-export function shape(
+export function shape<T extends HasShape>(
   value: Value<"default" | "rect" | "circle" | "poly">,
-): Attribute<HasShape> {
+): Attribute<T> {
   return setProperty("shape", value as Value<string>);
 }
 
 type HasCoords = "a" | "area" | "form";
 
-export function coords(value: Value<string>): Attribute<HasCoords> {
+export function coords<T extends HasCoords>(
+  value: Value<string>,
+): Attribute<T> {
   return setProperty("coords", value);
 }
 
@@ -421,7 +454,7 @@ type HasSrc =
   | "track"
   | "video";
 
-export function src(value: Value<string>): Attribute<HasSrc> {
+export function src<T extends HasSrc>(value: Value<string>): Attribute<T> {
   return setProperty("src", value);
 }
 
@@ -439,7 +472,9 @@ type HasHeight =
   | "th"
   | "video";
 
-export function height(value: Value<number>): Attribute<HasHeight> {
+export function height<T extends HasHeight>(
+  value: Value<number>,
+): Attribute<T> {
   return setProperty("height", value);
 }
 
@@ -462,13 +497,13 @@ type HasWidth =
   | "th"
   | "video";
 
-export function width(value: Value<number>): Attribute<HasWidth> {
+export function width<T extends HasWidth>(value: Value<number>): Attribute<T> {
   return setProperty("width", value);
 }
 
 type HasAlt = "applet" | "area" | "form" | "img" | "input";
 
-export function alt(value: Value<string>): Attribute<HasAlt> {
+export function alt<T extends HasAlt>(value: Value<string>): Attribute<T> {
   return setProperty("alt", value);
 }
 
@@ -476,19 +511,25 @@ export function alt(value: Value<string>): Attribute<HasAlt> {
 
 type MediaTag = "audio" | "video";
 
-export function autoplay(value: Value<boolean>): Attribute<MediaTag> {
+export function autoplay<T extends MediaTag>(
+  value: Value<boolean>,
+): Attribute<T> {
   return setProperty("autoplay", value);
 }
 
-export function controls(value: Value<boolean>): Attribute<MediaTag> {
+export function controls<T extends MediaTag>(
+  value: Value<boolean>,
+): Attribute<T> {
   return setProperty("controls", value);
 }
 
-export function loop(value: Value<boolean>): Attribute<MediaTag> {
+export function loop<T extends MediaTag>(value: Value<boolean>): Attribute<T> {
   return setProperty("loop", value);
 }
 
-export function preload(value: Value<string>): Attribute<MediaTag> {
+export function preload<T extends MediaTag>(
+  value: Value<string>,
+): Attribute<T> {
   return setProperty("preload", value);
 }
 
@@ -563,23 +604,31 @@ type HasAlign =
   | "thead"
   | "tr";
 
-export function align(value: Value<string>): Attribute<HasAlign> {
+export function align<T extends HasAlign>(value: Value<string>): Attribute<T> {
   return setProperty("align", value);
 }
 
-export function colSpan(value: Value<number>): Attribute<"td" | "th"> {
+export function colSpan<T extends "td" | "th">(
+  value: Value<number>,
+): Attribute<T> {
   return setProperty("colSpan", value);
 }
 
-export function rowspan(value: Value<number>): Attribute<"td" | "th"> {
+export function rowspan<T extends "td" | "th">(
+  value: Value<number>,
+): Attribute<T> {
   return setProperty("rowSpan", value);
 }
 
-export function headers(value: Value<string>): Attribute<"td" | "th"> {
+export function headers<T extends "td" | "th">(
+  value: Value<string>,
+): Attribute<T> {
   return setProperty("headers", value);
 }
 
-export function scope(value: Value<string>): Attribute<"td" | "th"> {
+export function scope<T extends "td" | "th">(
+  value: Value<string>,
+): Attribute<T> {
   return setProperty("scope", value);
 }
 
@@ -615,20 +664,22 @@ export function tabIndex(value: Value<number>): Attribute {
 
 type HasCite = "blockquote" | "del" | "ins" | "q";
 
-export function cite(value: Value<string>): Attribute<HasCite> {
+export function cite<T extends HasCite>(value: Value<string>): Attribute<T> {
   return setProperty("cite", value);
 }
 
 type HasDatetime = "del" | "ins" | "time";
 
-export function dateTime(value: Value<string>): Attribute<HasDatetime> {
+export function dateTime<T extends HasDatetime>(
+  value: Value<string>,
+): Attribute<T> {
   return setProperty("dateTime", value);
 }
 
 // Entry points
 
-export function bindAttributes<T extends AttrT>(
-  element: HTMLElementTagNameMap[T],
+export function bindAttributes<T extends Tag>(
+  element: Element<T>,
   attributes: Attributes<T>,
 ): CleanupTask {
   const removeAllAttributes = () => {

@@ -1,7 +1,14 @@
-import { Cell, Operational, Stream, Transaction, Unit } from "sodiumjs";
-import { streamMapFactory, StreamMap, streamSource } from "../utils";
+import { Cell, Stream, Transaction, Unit } from "sodiumjs";
 
-import { Attributes, bindAttributes } from "./attributes";
+import { Attributes } from "./attributes";
+import {
+  DomBuilder,
+  renderWidgetInternal,
+  withCurrentBuilder,
+} from "./builder";
+import { DomEventStreamMap, Tag, Widget } from "./core";
+
+export { DomEventStreamMap, Tag, Widget };
 
 export {
   Attribute,
@@ -89,26 +96,6 @@ export {
   wrap,
 } from "./attributes";
 
-// Public API
-
-// Types
-
-/**
- * A record containing the set of events available for each DOM element.
- */
-export type DomEventStreamMap = StreamMap<HTMLElementEventMap>;
-
-/**
- * A "widget" is just a parameterless function that returns some result, where
- * the following rules apply:
- *
- * 1. Widgets can call other widgets directly.
- * 2. Widgets can call DOM-building functions like text, el.
- * 3. The top / app-level widget should be passed as an argument to a widget
- *    rendering function sich as `mainWidget` or `renderWidget`.
- */
-export type Widget<T> = () => T;
-
 // Entry-points
 
 /**
@@ -143,8 +130,6 @@ export function renderWidget(
 
 // UI Primatives
 
-type Tag = keyof HTMLElementTagNameMap;
-
 /**
  * Appends a text node to the current document element.
  *
@@ -163,7 +148,7 @@ export function text(value: string | Cell<string>): Unit {
  *
  * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
  */
-export function el<T extends Tag>(tagName: T): [DomEventStreamMap, Unit];
+export function el<T extends Tag>(tagName: T): [DomEventStreamMap<T>, Unit];
 
 /**
  * Appends an element node to the current document element with a set of attributes.
@@ -174,9 +159,9 @@ export function el<T extends Tag>(tagName: T): [DomEventStreamMap, Unit];
  * @param attributes a map of name / value attributes to add to the element. The valyes can be static or dynamic values.
  */
 export function el<T extends Tag>(
-  tagName: string,
+  tagName: T,
   attributes: Attributes<T>,
-): [DomEventStreamMap, Unit];
+): [DomEventStreamMap<T>, Unit];
 
 /**
  * Appends an element node to the current document element with a set of attributes containing a child widget.
@@ -191,12 +176,12 @@ export function el<T extends Tag, A>(
   tagName: T,
   attributes: Attributes<T>,
   children: Widget<A>,
-): [DomEventStreamMap, A];
+): [DomEventStreamMap<T>, A];
 export function el<T extends Tag, A>(
   tagName: T,
   attributes?: Attributes<T>,
   children?: Widget<A>,
-): [DomEventStreamMap, A] {
+): [DomEventStreamMap<T>, A] {
   return withCurrentBuilder("el", (builder) =>
     builder.el(tagName, attributes ?? [], children),
   );
@@ -224,196 +209,4 @@ export function holdW<T>(
   sWidget: Stream<Widget<T>>,
 ): Widget<Cell<T>> {
   return switchW(sWidget.hold(initial));
-}
-
-// Internal API
-
-const InternalStaticState = {
-  currentBuilder: null as DomBuilder | null,
-};
-
-function withCurrentBuilder<T>(
-  opName: string,
-  run: (builder: DomBuilder) => T,
-): T {
-  if (!InternalStaticState.currentBuilder) {
-    throw new Error(
-      `${opName} must be run within a widget block passed to mainWidget, renderWidget, or similar`,
-    );
-  }
-  return run(InternalStaticState.currentBuilder);
-}
-
-interface DomBuilderContext<E> {
-  readonly rootElement: E;
-}
-
-type UnitOfWork<E> = (ctx: DomBuilderContext<E>) => () => void;
-
-interface DomBuilder<E = HTMLElement> {
-  collectWork(): UnitOfWork<E>;
-  el<T extends Tag, A>(
-    tag: T,
-    attr: Attributes<T>,
-    children?: Widget<A>,
-  ): [DomEventStreamMap, A];
-  pushUnitOfWork(unit: UnitOfWork<E>): void;
-  switchW<T>(cWidget: Cell<Widget<T>>): Widget<Cell<T>>;
-  text(text: string | Cell<string>): Unit;
-}
-
-const pass = () => undefined;
-
-function DomBuilder(): DomBuilder {
-  // Local state
-  const work: UnitOfWork<HTMLElement>[] = [];
-  let isWorkComplete = false;
-
-  function pushUnitOfWork(unit: UnitOfWork<HTMLElement>) {
-    if (isWorkComplete) {
-      throw new Error("This DOM Builder can no longer be appended to.");
-    }
-    work.push(unit);
-  }
-
-  function bind<T>(value: T | Cell<T>, doBind: (v: T) => void): () => void {
-    if (value instanceof Cell) {
-      doBind(value.sample());
-      return Operational.updates(value).listen(doBind);
-    } else {
-      doBind(value);
-      return pass;
-    }
-  }
-
-  // Public Methods
-  const builder: DomBuilder = {
-    collectWork() {
-      if (isWorkComplete) {
-        throw new Error("Work has already been collected.");
-      }
-      isWorkComplete = true;
-      return (ctx) => {
-        const disposers: (() => void)[] = [];
-        for (const unit of work) {
-          disposers.push(unit(ctx));
-        }
-        return () => {
-          for (const dispose of disposers) {
-            dispose();
-          }
-        };
-      };
-    },
-
-    text(text) {
-      pushUnitOfWork((ctx) => {
-        const node = ctx.rootElement.ownerDocument.createTextNode("");
-        const unbind = bind(text, (value) => (node.textContent = value));
-        ctx.rootElement.appendChild(node);
-        return () => {
-          ctx.rootElement.removeChild(node);
-          unbind();
-        };
-      });
-      return Unit.UNIT;
-    },
-
-    el<T extends Tag, A>(
-      tag: T,
-      attr: Attributes<T>,
-      children?: Widget<A>,
-    ): [DomEventStreamMap, A] {
-      let resolveEl: (element: HTMLElement) => void;
-      const elementPromise = new Promise<HTMLElement>(
-        (resolve) => (resolveEl = resolve),
-      );
-      const events = streamMapFactory<HTMLElementEventMap>((event) =>
-        streamSource(event, (send) => {
-          const addEventListenerPromise = elementPromise.then((element) => {
-            element.addEventListener(event, send);
-            return element;
-          });
-          return () =>
-            addEventListenerPromise.then((element) =>
-              element.removeEventListener(event, send),
-            );
-        }),
-      );
-      const childrenBuilder = children && DomBuilder();
-      const childrenResult =
-        children && childrenBuilder
-          ? renderWidgetInternal(childrenBuilder, children)
-          : (Unit.UNIT as A);
-      pushUnitOfWork((ctx) => {
-        const element = ctx.rootElement.ownerDocument.createElement(tag);
-        const disposers: (() => void)[] = [];
-        const disposeAttributes = bindAttributes(element, attr);
-        const performChildrenWork = childrenBuilder?.collectWork();
-        const disposeChildren = performChildrenWork?.({ rootElement: element });
-        resolveEl(element);
-        ctx.rootElement.appendChild(element);
-        return () => {
-          ctx.rootElement.removeChild(element);
-          disposeChildren?.();
-          disposeAttributes();
-          for (const dispose of disposers) {
-            dispose();
-          }
-        };
-      });
-
-      return [events, childrenResult];
-    },
-
-    switchW(cWidget) {
-      return () => {
-        // Because this will be run as a widget, the current builder may not be this one.
-        const currentBuilder = InternalStaticState.currentBuilder ?? builder;
-        const cResultXBuilder = cWidget.map((widget) => {
-          const widgetBuilder = DomBuilder();
-          return [
-            widgetBuilder,
-            renderWidgetInternal(widgetBuilder, widget),
-          ] as const;
-        });
-        const cResult = cResultXBuilder.map(([, t]) => t);
-        const cBuilder = cResultXBuilder.map(([builder]) => builder);
-        currentBuilder.pushUnitOfWork(({ rootElement }) => {
-          const cDisposer = cBuilder.map((builder) =>
-            builder.collectWork()({ rootElement }),
-          );
-          let currentDispose = cDisposer.sample();
-          const unlisten = Operational.updates(cDisposer)
-            .snapshot(
-              cDisposer,
-              (dispose, previousDispose) => [previousDispose, dispose] as const,
-            )
-            .listen(([previousDispose, dispose]) => {
-              previousDispose();
-              currentDispose = dispose;
-            });
-          return () => {
-            unlisten();
-            currentDispose();
-          };
-        });
-        return cResult;
-      };
-    },
-
-    pushUnitOfWork,
-  };
-
-  return builder;
-}
-
-function renderWidgetInternal<T>(builder: DomBuilder, widget: Widget<T>): T {
-  const prevBuilder = InternalStaticState.currentBuilder;
-  InternalStaticState.currentBuilder = builder;
-  try {
-    return widget();
-  } finally {
-    InternalStaticState.currentBuilder = prevBuilder;
-  }
 }
