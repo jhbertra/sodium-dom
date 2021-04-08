@@ -1,5 +1,5 @@
 import { StreamSink, Transaction, Unit } from "sodiumjs";
-import { el, mainWidget, text } from "../../src";
+import { el, mainWidget, text } from "../../src/document";
 
 function repeatEvery(ms: number, f: () => void) {
   const go = () => {

@@ -1,11 +1,4 @@
-import {
-  Cell,
-  Operational,
-  Stream,
-  StreamSink,
-  Transaction,
-  Vertex,
-} from "sodiumjs";
+import { Cell, Operational, Stream, StreamSink, Vertex } from "sodiumjs";
 
 // Sodium helpers
 
@@ -125,6 +118,35 @@ export function bind<T>(
 ): CleanupTask {
   updateTarget(value.sample());
   return performEffect(Operational.updates(value), updateTarget);
+}
+
+export type StreamMap<T> = {
+  readonly [stream in keyof T]: Stream<T[stream]>;
+};
+
+export type StreamCreators<T> = {
+  readonly [stream in keyof T]: () => Stream<T[stream]>;
+};
+
+export function streamMapFactory<T>(
+  creator: <K extends keyof T>(key: K) => Stream<T[K]>,
+): StreamMap<T> {
+  return new Proxy({} as StreamMap<T>, {
+    get(target, p) {
+      if (!target[p as keyof T]) {
+        // eslint-disable-next-line
+        // @ts-ignore
+        target[p as keyof T] = creator(p as keyof T);
+      }
+      return target[p as keyof T];
+    },
+  });
+}
+
+export function streamMap<T>(creatorMap: StreamCreators<T>): StreamMap<T> {
+  return streamMapFactory(
+    (key) => creatorMap[key]?.() as Stream<T[typeof key]>,
+  );
 }
 
 // Value type

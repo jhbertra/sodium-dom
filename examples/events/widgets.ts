@@ -4,12 +4,16 @@ import { type } from "../../src/document/attributes";
 
 export function controlsWidget(cCount: Cell<number>): Widget<Stream<number>> {
   return () => {
-    const [subBtn] = el("button", new Cell([type("button")]), () => text("-"));
+    const [{ click: subClick }] = el("button", new Cell([type("button")]), () =>
+      text("-"),
+    );
     text(cCount.map((count) => `Current value: ${count}`));
-    const [addBtn] = el("button", [type("button")], () => text("+"));
+    const [{ click: addClick }] = el("button", [type("button")], () =>
+      text("+"),
+    );
 
-    const sSub = subBtn("click").mapTo(-1);
-    const sAdd = addBtn("click").mapTo(1);
+    const sSub = subClick.mapTo(-1);
+    const sAdd = addClick.mapTo(1);
 
     return sSub.orElse(sAdd);
   };
@@ -17,12 +21,12 @@ export function controlsWidget(cCount: Cell<number>): Widget<Stream<number>> {
 
 const switchWidget: Widget<Cell<boolean>> = () => {
   const cOn = new CellLoop<boolean>();
-  const [onBtn] = el("button", [type("button")], () =>
+  const [{ click: onClick }] = el("button", [type("button")], () =>
     text(
       cOn.map<string>((on) => (on ? "disable" : "enable")),
     ),
   );
-  cOn.loop(onBtn("click").accum<boolean>(true, (_, b) => !b));
+  cOn.loop(onClick.accum<boolean>(true, (_, b) => !b));
   return cOn;
 };
 

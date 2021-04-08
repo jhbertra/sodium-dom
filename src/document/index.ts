@@ -1,5 +1,5 @@
 import { Cell, Operational, Stream, Transaction, Unit } from "sodiumjs";
-import { streamSource } from "../utils";
+import { streamMapFactory, StreamMap, streamSource } from "../utils";
 
 import { Attributes, bindAttributes } from "./attributes";
 
@@ -96,11 +96,7 @@ export {
 /**
  * A record containing the set of events available for each DOM element.
  */
-export interface DomEvents {
-  <T extends keyof HTMLElementEventMap>(name: T): Stream<
-    HTMLElementEventMap[T]
-  >;
-}
+export type DomEventStreamMap = StreamMap<HTMLElementEventMap>;
 
 /**
  * A "widget" is just a parameterless function that returns some result, where
@@ -167,7 +163,7 @@ export function text(value: string | Cell<string>): Unit {
  *
  * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
  */
-export function el<T extends Tag>(tagName: T): [DomEvents, Unit];
+export function el<T extends Tag>(tagName: T): [DomEventStreamMap, Unit];
 
 /**
  * Appends an element node to the current document element with a set of attributes.
@@ -180,7 +176,7 @@ export function el<T extends Tag>(tagName: T): [DomEvents, Unit];
 export function el<T extends Tag>(
   tagName: string,
   attributes: Attributes<T>,
-): [DomEvents, Unit];
+): [DomEventStreamMap, Unit];
 
 /**
  * Appends an element node to the current document element with a set of attributes containing a child widget.
@@ -195,12 +191,12 @@ export function el<T extends Tag, A>(
   tagName: T,
   attributes: Attributes<T>,
   children: Widget<A>,
-): [DomEvents, A];
+): [DomEventStreamMap, A];
 export function el<T extends Tag, A>(
   tagName: T,
   attributes?: Attributes<T>,
   children?: Widget<A>,
-): [DomEvents, A] {
+): [DomEventStreamMap, A] {
   return withCurrentBuilder("el", (builder) =>
     builder.el(tagName, attributes ?? [], children),
   );
@@ -260,7 +256,7 @@ interface DomBuilder<E = HTMLElement> {
     tag: T,
     attr: Attributes<T>,
     children?: Widget<A>,
-  ): [DomEvents, A];
+  ): [DomEventStreamMap, A];
   pushUnitOfWork(unit: UnitOfWork<E>): void;
   switchW<T>(cWidget: Cell<Widget<T>>): Widget<Cell<T>>;
   text(text: string | Cell<string>): Unit;
@@ -327,14 +323,12 @@ function DomBuilder(): DomBuilder {
       tag: T,
       attr: Attributes<T>,
       children?: Widget<A>,
-    ): [DomEvents, A] {
+    ): [DomEventStreamMap, A] {
       let resolveEl: (element: HTMLElement) => void;
       const elementPromise = new Promise<HTMLElement>(
         (resolve) => (resolveEl = resolve),
       );
-      const events = <T extends keyof HTMLElementEventMap>(
-        event: T,
-      ): Stream<HTMLElementEventMap[T]> =>
+      const events = streamMapFactory<HTMLElementEventMap>((event) =>
         streamSource(event, (send) => {
           const addEventListenerPromise = elementPromise.then((element) => {
             element.addEventListener(event, send);
@@ -344,7 +338,8 @@ function DomBuilder(): DomBuilder {
             addEventListenerPromise.then((element) =>
               element.removeEventListener(event, send),
             );
-        });
+        }),
+      );
       const childrenBuilder = children && DomBuilder();
       const childrenResult =
         children && childrenBuilder
