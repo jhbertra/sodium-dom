@@ -16,7 +16,7 @@ export function controlsWidget(cCount: Cell<number>): Widget<Stream<number>> {
   };
 }
 
-const switchWidget: Widget<Cell<boolean>> = () => {
+const toggleWidget: Widget<Cell<boolean>> = () => {
   const cOn = new CellLoop<boolean>();
   const cButtonText = cOn.map<string>((on) => (on ? "disable" : "enable"));
 
@@ -33,7 +33,7 @@ export const appWidget: Widget<void> = () => {
   // Render UI
   h1([], "Obligatory counter example");
   const [, sDelta] = div([], controlsWidget(cCount));
-  const [, cOn] = div([], switchWidget);
+  const [, cOn] = div([], toggleWidget);
 
   // Setup event handlers. Note - we could have used sDelta.gate(cOn) to turn
   // the counter on / off, but doing it this way actually modifies the FRP
