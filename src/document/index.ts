@@ -1,4 +1,5 @@
 import { Cell, Stream, Transaction, Unit } from "sodiumjs";
+import { Value } from "../utils";
 
 import { Attributes } from "./attributes";
 import {
@@ -164,6 +165,21 @@ export function el<T extends Tag>(
 ): [DomEventStreamMap<T>, Unit];
 
 /**
+ * Appends an element node to the current document element with a set of attributes containing child text.
+ *
+ * WARNING - must be called witin a widget.
+ *
+ * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
+ * @param attributes a map of name / value attributes to add to the element. The valyes can be static or dynamic values.
+ * @param children text to render inside this element.
+ */
+export function el<T extends Tag, Unit>(
+  tagName: T,
+  attributes: Attributes<T>,
+  children: Value<string>,
+): [DomEventStreamMap<T>, Unit];
+
+/**
  * Appends an element node to the current document element with a set of attributes containing a child widget.
  *
  * WARNING - must be called witin a widget.
@@ -180,11 +196,19 @@ export function el<T extends Tag, A>(
 export function el<T extends Tag, A>(
   tagName: T,
   attributes?: Attributes<T>,
-  children?: Widget<A>,
+  children?: Widget<A> | Value<string>,
 ): [DomEventStreamMap<T>, A] {
   return withCurrentBuilder("el", (builder) =>
-    builder.el(tagName, attributes ?? [], children),
-  );
+    builder.el(
+      tagName,
+      attributes ?? [],
+      typeof children === "function"
+        ? children
+        : typeof children === "string" || children instanceof Cell
+        ? () => text(children)
+        : undefined,
+    ),
+  ) as [DomEventStreamMap<T>, A];
 }
 
 /**

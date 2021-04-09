@@ -5,8 +5,8 @@ import { streamMap } from "../../src/utils";
 import { controlsWidget } from "../events/widgets";
 
 const pagerWidget = () => {
-  const [prev] = el("button", [type("button")], () => text("< previous"));
-  const [next] = el("button", [type("button")], () => text("next >"));
+  const [prev] = el("button", [type("button")], "< previous");
+  const [next] = el("button", [type("button")], "next >");
 
   return streamMap({ prev: () => prev.click, next: () => next.click });
 };
@@ -33,7 +33,7 @@ const appWidget: Widget<void> = () => {
   const cCount = new CellLoop<number>();
 
   // Render UI
-  el("h1", [], () => text("Switching between widgets"));
+  el("h1", [], "Switching between widgets");
   const [, csDelta] = el("div", [], switchW(cWidget));
   const [, { prev, next }] = el("div", [], pagerWidget);
   text(cCount.map((i) => `Aggregate data: ${i}`));

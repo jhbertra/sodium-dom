@@ -6,9 +6,9 @@ export function controlsWidget(cCount: Cell<number>): Widget<Stream<number>> {
   return () => {
     const cLabel = cCount.map((count) => `Current value: ${count}`);
 
-    const [sub] = el("button", [type("button")], () => text("-"));
+    const [sub] = el("button", [type("button")], "-");
     text(cLabel);
-    const [add] = el("button", [type("button")], () => text("+"));
+    const [add] = el("button", [type("button")], "+");
 
     const sSub = sub.click.mapTo(-1);
     const sAdd = add.click.mapTo(1);
@@ -20,7 +20,7 @@ const switchWidget: Widget<Cell<boolean>> = () => {
   const cOn = new CellLoop<boolean>();
   const cButtonText = cOn.map<string>((on) => (on ? "disable" : "enable"));
 
-  const [on] = el("button", [type("button")], () => text(cButtonText));
+  const [on] = el("button", [type("button")], cButtonText);
 
   cOn.loop(on.click.accum<boolean>(true, (_, b) => !b));
   return cOn;
@@ -31,7 +31,7 @@ export const appWidget: Widget<void> = () => {
   const cCount = new CellLoop<number>();
 
   // Render UI
-  el("h1", [], () => text("Obligatory counter example"));
+  el("h1", [], "Obligatory counter example");
   const [, sDelta] = el("div", [], controlsWidget(cCount));
   const [, cOn] = el("div", [], switchWidget);
 
