@@ -8,7 +8,22 @@ import { withCurrentBuilder } from "./builder";
  * Used to swap out widgets at runtime (e.g. can be used to implement SPA routers or tabbed UIs).
  */
 export function switchWidget<T>(cWidget: Cell<Widget<T>>): Widget<Cell<T>> {
-  return withCurrentBuilder("switchW", (builder) => builder.switchW(cWidget));
+  return withCurrentBuilder("switchWidget", (builder) =>
+    builder.switchWidget(cWidget),
+  );
+}
+
+/**
+ * Given a time-varying widget, produce a widget which produces the time varying results of those widgets.
+ * Used to swap out widgets at runtime (e.g. can be used to implement SPA routers or tabbed UIs).
+ */
+export function list<I, A>(
+  cList: Cell<I[]>,
+  itemWidget: (item: I) => Widget<A>,
+): Widget<Cell<A[]>> {
+  return withCurrentBuilder("list", (builder) =>
+    builder.list(cList, itemWidget),
+  );
 }
 
 /**

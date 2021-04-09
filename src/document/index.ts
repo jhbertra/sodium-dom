@@ -91,7 +91,7 @@ export {
   wrap,
 } from "./attributes";
 
-export { holdWidget, switchWidget } from "./combinators";
+export { holdWidget, list, switchWidget } from "./combinators";
 
 export {
   ElementCreator,
@@ -244,6 +244,6 @@ export function renderWidget(
   renderWidgetInternal(builder, widget);
   Transaction.currentTransaction.post(0, () => {
     const performWork = builder.collectWork();
-    performWork({ rootElement });
+    performWork({ rootElement, document });
   });
 }

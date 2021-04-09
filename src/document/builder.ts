@@ -29,6 +29,7 @@ export function withCurrentBuilder<T>(
 }
 
 interface DomBuilderContext<E> {
+  readonly document: Document;
   readonly rootElement: E;
 }
 
@@ -39,8 +40,12 @@ export interface DomBuilder<E = HTMLElement> {
     attr: Attributes<T>,
     children?: Widget<A>,
   ): [DomEventStreamMap<T>, A];
+  list<I, A>(
+    cList: Cell<I[]>,
+    itemWidget: (item: I) => Widget<A>,
+  ): Widget<Cell<A[]>>;
   pushUnitOfWork(unit: SetupTask<DomBuilderContext<E>>): void;
-  switchW<T>(cWidget: Cell<Widget<T>>): Widget<Cell<T>>;
+  switchWidget<T>(cWidget: Cell<Widget<T>>): Widget<Cell<T>>;
   text(text: Value<string>): Unit;
 }
 
@@ -77,15 +82,15 @@ export function DomBuilder(): DomBuilder {
     },
 
     text(text) {
-      pushUnitOfWork((ctx) => {
-        const node = ctx.rootElement.ownerDocument.createTextNode("");
+      pushUnitOfWork(({ rootElement, document }) => {
+        const node = document.createTextNode("");
         const unbind = bindValue(text, (value) => {
           node.textContent = value;
           return () => (node.textContent = "");
         });
-        ctx.rootElement.appendChild(node);
+        rootElement.appendChild(node);
         return () => {
-          ctx.rootElement.removeChild(node);
+          rootElement.removeChild(node);
           unbind();
         };
       });
@@ -118,16 +123,19 @@ export function DomBuilder(): DomBuilder {
         children && childrenBuilder
           ? renderWidgetInternal(childrenBuilder, children)
           : (Unit.UNIT as A);
-      pushUnitOfWork((ctx) => {
-        const element = ctx.rootElement.ownerDocument.createElement(tag);
+      pushUnitOfWork(({ document, rootElement }) => {
+        const element = document.createElement(tag);
         const disposers: (() => void)[] = [];
         const disposeAttributes = bindAttributes(element, attr);
         const performChildrenWork = childrenBuilder?.collectWork();
-        const disposeChildren = performChildrenWork?.({ rootElement: element });
+        const disposeChildren = performChildrenWork?.({
+          rootElement: element,
+          document,
+        });
         resolveEl(element);
-        ctx.rootElement.appendChild(element);
+        rootElement.appendChild(element);
         return () => {
-          ctx.rootElement.removeChild(element);
+          rootElement.removeChild(element);
           disposeChildren?.();
           disposeAttributes();
           for (const dispose of disposers) {
@@ -139,7 +147,46 @@ export function DomBuilder(): DomBuilder {
       return [events, childrenResult];
     },
 
-    switchW(cWidget) {
+    list(cList, itemWidget) {
+      return () => {
+        // Because this will be run as a widget, the current builder may not be this one.
+        const currentBuilder = InternalStaticState.currentBuilder ?? builder;
+        const cResultXBuilder = cList.map((list) => {
+          const listBuilder = DomBuilder();
+          return [
+            list.map((item) => {
+              const widget = itemWidget(item);
+              return renderWidgetInternal(listBuilder, widget);
+            }),
+            listBuilder,
+          ] as const;
+        });
+        const cResult = cResultXBuilder.map(([result]) => result);
+        const cBuilder = cResultXBuilder.map(([, builder]) => builder);
+        currentBuilder.pushUnitOfWork(({ document, rootElement }) => {
+          const cDisposer = cBuilder.map((builder) =>
+            builder.collectWork()({ rootElement, document }),
+          );
+          let currentDispose = cDisposer.sample();
+          const unlisten = Operational.updates(cDisposer)
+            .snapshot(
+              cDisposer,
+              (dispose, previousDispose) => [previousDispose, dispose] as const,
+            )
+            .listen(([previousDispose, dispose]) => {
+              previousDispose();
+              currentDispose = dispose;
+            });
+          return () => {
+            unlisten();
+            currentDispose();
+          };
+        });
+        return cResult;
+      };
+    },
+
+    switchWidget(cWidget) {
       return () => {
         // Because this will be run as a widget, the current builder may not be this one.
         const currentBuilder = InternalStaticState.currentBuilder ?? builder;
@@ -152,9 +199,9 @@ export function DomBuilder(): DomBuilder {
         });
         const cResult = cResultXBuilder.map(([, t]) => t);
         const cBuilder = cResultXBuilder.map(([builder]) => builder);
-        currentBuilder.pushUnitOfWork(({ rootElement }) => {
+        currentBuilder.pushUnitOfWork(({ rootElement, document }) => {
           const cDisposer = cBuilder.map((builder) =>
-            builder.collectWork()({ rootElement }),
+            builder.collectWork()({ document, rootElement }),
           );
           let currentDispose = cDisposer.sample();
           const unlisten = Operational.updates(cDisposer)
