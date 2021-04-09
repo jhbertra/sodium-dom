@@ -4,10 +4,13 @@ import {
   el,
   height,
   id,
+  li,
   mainWidget,
+  p,
   src,
   style,
   text,
+  ul,
 } from "../../src/document";
 
 function repeatEvery(ms: number, f: () => void) {
@@ -70,15 +73,15 @@ Transaction.run(() =>
 
     // Build UI
     el("header", [], () => {
-      el("h1", [], () => text("Building Elements"));
-      el("p", [], () => text("In Sodium DOM"));
+      el("h1", [], "Building Elements");
+      el("p", [], "In Sodium DOM");
     });
 
     el("article", [], () => {
-      el("h2", [], () => text("Creating elements"));
+      el("h2", [], "Creating elements");
       el("p", [], () => {
         text("The primary API for creating elements in Sodium DOM is the ");
-        el("code", [], () => text("DomBuilder#el"));
+        el("code", [], "DomBuilder#el");
         text(" method. It accepts 3 arguments. The first argument ");
         text("is mandatory, and is the name of the HTML tag to render.");
       });
@@ -97,7 +100,7 @@ Transaction.run(() =>
         </html>
       `);
 
-      el("h2", [], () => text("Passing Attributes"));
+      el("h2", [], "Passing Attributes");
 
       el("p", [], () => {
         text(
@@ -137,7 +140,7 @@ Transaction.run(() =>
         .map((i) => attributes[i] as Attribute<"div">[]);
       el("div", cAttr);
 
-      el("h2", [], () => text("Passing Children"));
+      el("h2", [], "Passing Children");
 
       el("p", [], () => {
         text("There are examples of this above (because it's almost ");
@@ -148,23 +151,47 @@ Transaction.run(() =>
       codeBlock(`
         mainWidget(() => {
           el("ul", [style("border", "solid black 1px")], () => {
-            el("li", [], () => text("item 1"));
-            el("li", [], () => text("item 2"));
-            el("li", [], () => text("item 3"));
-            el("li", [], () => text("item 4"));
+            el("li", [], "item 1");
+            el("li", [], "item 2");
+            el("li", [], "item 3");
+            el("li", [], "item 4");
           });
         });
       `);
       el("ul", [style("border", "solid black 1px")], () => {
-        el("li", [], () => text("item 1"));
-        el("li", [], () => text("item 2"));
-        el("li", [], () => text("item 3"));
-        el("li", [], () => text("item 4"));
+        el("li", [], "item 1");
+        el("li", [], "item 2");
+        el("li", [], "item 3");
+        el("li", [], "item 4");
       });
 
       text("You might be wondering if children can be FRP values too. ");
       text("There is of course an API for dynamic child widgets, but ");
       text("el does not have this power. More on this in another example!");
+
+      el("h2", [], "Helper function");
+
+      p([], () => {
+        text("Because using a primitive like el everywhere is somewhat ");
+        text("redundant, there are helper functions defined for all standard");
+        text("HTML element tags.");
+      });
+      codeBlock(`
+        mainWidget(() => {
+          ul([style("border", "solid black 1px")], () => {
+            li([], "item 1");
+            li([], "item 2");
+            li([], "item 3");
+            li([], "item 4");
+          });
+        });
+      `);
+      ul([style("border", "solid black 1px")], () => {
+        li([], "item 1");
+        li([], "item 2");
+        li([], "item 3");
+        li([], "item 4");
+      });
     });
   }),
 );

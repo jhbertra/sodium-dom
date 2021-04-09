@@ -1,15 +1,9 @@
-import { Cell, Stream, Transaction, Unit } from "sodiumjs";
-import { Value } from "../utils";
+import { Transaction } from "sodiumjs";
 
-import { Attributes } from "./attributes";
-import {
-  DomBuilder,
-  renderWidgetInternal,
-  withCurrentBuilder,
-} from "./builder";
-import { DomEventStreamMap, Tag, Widget } from "./core";
+import { DomBuilder, renderWidgetInternal } from "./builder";
+import { Widget } from "./core";
 
-export { DomEventStreamMap, Tag, Widget };
+export { DomEventStreamMap, Tag, Widget } from "./core";
 
 export {
   Attribute,
@@ -97,7 +91,132 @@ export {
   wrap,
 } from "./attributes";
 
-// Entry-points
+export { holdWidget, switchWidget } from "./combinators";
+
+export {
+  ElementCreator,
+  a,
+  abbr,
+  address,
+  applet,
+  area,
+  article,
+  aside,
+  audio,
+  b,
+  base,
+  basefont,
+  bdi,
+  bdo,
+  blockquote,
+  body,
+  br,
+  button,
+  canvas,
+  caption,
+  cite as citeEl,
+  code,
+  col,
+  colgroup,
+  data,
+  datalist,
+  dd,
+  del,
+  details,
+  dfn,
+  dialog,
+  dir as dirEl,
+  div,
+  dl,
+  dt,
+  el,
+  em,
+  embed,
+  fieldset,
+  figcaption,
+  figure,
+  font,
+  footer,
+  form,
+  frame,
+  frameset,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  head,
+  header,
+  hgroup,
+  hr,
+  html,
+  i,
+  iframe,
+  img,
+  input,
+  ins,
+  kbd,
+  label,
+  legend,
+  li,
+  link,
+  main,
+  map,
+  mark,
+  marquee,
+  menu,
+  meta,
+  meter,
+  nav,
+  noscript,
+  object,
+  ol,
+  optgroup,
+  option,
+  output,
+  p,
+  param,
+  picture,
+  pre,
+  progress,
+  q,
+  rp,
+  rt,
+  ruby,
+  s,
+  samp,
+  script,
+  section,
+  select,
+  slot,
+  small,
+  source,
+  span,
+  strong,
+  style as styleEl,
+  sub,
+  summary,
+  sup,
+  table,
+  tbody,
+  td,
+  template,
+  text,
+  textarea,
+  tfoot,
+  th,
+  thead,
+  time,
+  title as titleEl,
+  tr,
+  track,
+  u,
+  ul,
+  var_,
+  video,
+  wbr,
+} from "./elements";
 
 /**
  * Render a widget in the `body` element of the current document.
@@ -127,110 +246,4 @@ export function renderWidget(
     const performWork = builder.collectWork();
     performWork({ rootElement });
   });
-}
-
-// UI Primatives
-
-/**
- * Appends a text node to the current document element.
- *
- * WARNING - must be called witin a widget.
- *
- * @param value the static or dynamic string value to render inside the text node.
- */
-export function text(value: string | Cell<string>): Unit {
-  return withCurrentBuilder("text", (builder) => builder.text(value));
-}
-
-/**
- * Appends an element node to the current document element.
- *
- * WARNING - must be called witin a widget.
- *
- * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
- */
-export function el<T extends Tag>(tagName: T): [DomEventStreamMap<T>, Unit];
-
-/**
- * Appends an element node to the current document element with a set of attributes.
- *
- * WARNING - must be called witin a widget.
- *
- * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
- * @param attributes a map of name / value attributes to add to the element. The valyes can be static or dynamic values.
- */
-export function el<T extends Tag>(
-  tagName: T,
-  attributes: Attributes<T>,
-): [DomEventStreamMap<T>, Unit];
-
-/**
- * Appends an element node to the current document element with a set of attributes containing child text.
- *
- * WARNING - must be called witin a widget.
- *
- * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
- * @param attributes a map of name / value attributes to add to the element. The valyes can be static or dynamic values.
- * @param children text to render inside this element.
- */
-export function el<T extends Tag, Unit>(
-  tagName: T,
-  attributes: Attributes<T>,
-  children: Value<string>,
-): [DomEventStreamMap<T>, Unit];
-
-/**
- * Appends an element node to the current document element with a set of attributes containing a child widget.
- *
- * WARNING - must be called witin a widget.
- *
- * @param tagName the name of the HTML element to append (e.g. "div", "br", "img", etc...);
- * @param attributes a map of name / value attributes to add to the element. The valyes can be static or dynamic values.
- * @param children a child widget to render inside this element.
- */
-export function el<T extends Tag, A>(
-  tagName: T,
-  attributes: Attributes<T>,
-  children: Widget<A>,
-): [DomEventStreamMap<T>, A];
-export function el<T extends Tag, A>(
-  tagName: T,
-  attributes?: Attributes<T>,
-  children?: Widget<A> | Value<string>,
-): [DomEventStreamMap<T>, A] {
-  return withCurrentBuilder("el", (builder) =>
-    builder.el(
-      tagName,
-      attributes ?? [],
-      typeof children === "function"
-        ? children
-        : typeof children === "string" || children instanceof Cell
-        ? () => text(children)
-        : undefined,
-    ),
-  ) as [DomEventStreamMap<T>, A];
-}
-
-/**
- * Given a time-varying widget, produce a widget which produces time varying results of those widgets.
- * Used to swap out widgets at runtime.
- */
-export function switchW<T>(cWidget: Cell<Widget<T>>): Widget<Cell<T>> {
-  return withCurrentBuilder("switchW", (builder) => builder.switchW(cWidget));
-}
-
-// Convenience functions
-
-/**
- * Produce a widget from a stream of widgets. The last widget fired by the stream will be held. The initial widget
- * provided will be shown until the stream fires. The result of the resulting widget will change when sWidget changes.
- *
- * @param initial the initial widget to display. Its results will be the initial value of the resulting widget's Cell result.
- * @param sWidget a stream of widgets.
- */
-export function holdW<T>(
-  initial: Widget<T>,
-  sWidget: Stream<Widget<T>>,
-): Widget<Cell<T>> {
-  return switchW(sWidget.hold(initial));
 }

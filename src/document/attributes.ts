@@ -93,7 +93,10 @@ export function tokensList<T extends Tag>(
   );
 }
 
-export function style(name: string, value: Value<string>): Attribute {
+export function style<T extends Tag>(
+  name: string,
+  value: Value<string>,
+): Attribute<T> {
   return Attribute((element) =>
     bindValue(value, (v) => {
       element.style.setProperty(name, v);
@@ -104,23 +107,23 @@ export function style(name: string, value: Value<string>): Attribute {
 
 // Super Common Attributes
 
-export function className(value: Value<string[]>): Attribute {
+export function className<T extends Tag>(value: Value<string[]>): Attribute<T> {
   return tokens("classList", value);
 }
 
-export function classList(listMap: TokenListMap): Attribute {
+export function classList<T extends Tag>(listMap: TokenListMap): Attribute<T> {
   return tokensList("classList", listMap);
 }
 
-export function id(value: string): Attribute {
+export function id<T extends Tag>(value: string): Attribute<T> {
   return setProperty("id", value);
 }
 
-export function title(value: Value<string>): Attribute {
+export function title<T extends Tag>(value: Value<string>): Attribute<T> {
   return setProperty("title", value);
 }
 
-export function hidden(value: Value<boolean>): Attribute {
+export function hidden<T extends Tag>(value: Value<boolean>): Attribute<T> {
   return setProperty("hidden", value);
 }
 
@@ -212,7 +215,7 @@ export function autocomplete<T extends HasAutocomplete>(
   return setProperty("autocomplete", value);
 }
 
-export function autofocus(value: Value<boolean>): Attribute {
+export function autofocus<T extends Tag>(value: Value<boolean>): Attribute<T> {
   return setProperty("autofocus", value);
 }
 
@@ -634,31 +637,33 @@ export function scope<T extends "td" | "th">(
 
 // Less common attributes
 
-export function accessKey(value: Value<string>): Attribute {
+export function accessKey<T extends Tag>(value: Value<string>): Attribute<T> {
   return setProperty("accessKey", value);
 }
 
-export function contentEditable(value: Value<string>): Attribute {
+export function contentEditable<T extends Tag>(
+  value: Value<string>,
+): Attribute<T> {
   return setProperty("contentEditable", value);
 }
 
-export function dir(value: Value<"ltr" | "rtl">): Attribute {
+export function dir<T extends Tag>(value: Value<"ltr" | "rtl">): Attribute<T> {
   return setProperty("dir", value as Value<string>);
 }
 
-export function draggable(value: Value<boolean>): Attribute {
+export function draggable<T extends Tag>(value: Value<boolean>): Attribute<T> {
   return setProperty("draggable", value);
 }
 
-export function lang(value: Value<string>): Attribute {
+export function lang<T extends Tag>(value: Value<string>): Attribute<T> {
   return setProperty("lang", value);
 }
 
-export function spellcheck(value: Value<boolean>): Attribute {
+export function spellcheck<T extends Tag>(value: Value<boolean>): Attribute<T> {
   return setProperty("spellcheck", value);
 }
 
-export function tabIndex(value: Value<number>): Attribute {
+export function tabIndex<T extends Tag>(value: Value<number>): Attribute<T> {
   return setProperty("tabIndex", value);
 }
 

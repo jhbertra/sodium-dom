@@ -1,24 +1,32 @@
 import { Cell, CellLoop, lambda1, Stream, Transaction } from "sodiumjs";
-import { el, mainWidget, switchW, text, Widget } from "../../src/document";
+import {
+  button,
+  div,
+  h1,
+  mainWidget,
+  switchWidget,
+  text,
+  Widget,
+} from "../../src/document";
 import { type } from "../../src/document/attributes";
 import { streamMap } from "../../src/utils";
 import { controlsWidget } from "../events/widgets";
 
 const pagerWidget = () => {
-  const [prev] = el("button", [type("button")], "< previous");
-  const [next] = el("button", [type("button")], "next >");
+  const [prev] = button([type("button")], "< previous");
+  const [next] = button([type("button")], "next >");
 
   return streamMap({ prev: () => prev.click, next: () => next.click });
 };
 
-const widget1: Widget<Stream<number>> = () => {
+const widget1 = () => {
   text("Widget 1");
-  return new Stream();
+  return new Stream<number>();
 };
 
-const widget2: Widget<Stream<number>> = () => {
+const widget2 = () => {
   text("Widget 2");
-  return new Stream();
+  return new Stream<number>();
 };
 
 const widgets = (cCount: Cell<number>) => [
@@ -33,9 +41,9 @@ const appWidget: Widget<void> = () => {
   const cCount = new CellLoop<number>();
 
   // Render UI
-  el("h1", [], "Switching between widgets");
-  const [, csDelta] = el("div", [], switchW(cWidget));
-  const [, { prev, next }] = el("div", [], pagerWidget);
+  h1([], "Switching between widgets");
+  const [, csDelta] = div([], switchWidget(cWidget));
+  const [, { prev, next }] = div([], pagerWidget);
   text(cCount.map((i) => `Aggregate data: ${i}`));
 
   const sWidgetDelta = prev.mapTo(-1).orElse(next.mapTo(1));

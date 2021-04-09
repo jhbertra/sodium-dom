@@ -1,5 +1,5 @@
 import { StreamSink, Transaction, Unit } from "sodiumjs";
-import { el, mainWidget, text } from "../../src/document";
+import { br, mainWidget, text } from "../../src/document";
 
 function repeatEvery(ms: number, f: () => void) {
   const go = () => {
@@ -24,7 +24,7 @@ Transaction.run(() =>
 
     // Build UI
     text("Hello, world!");
-    el("br");
+    br();
     text(cText);
   }),
 );

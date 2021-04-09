@@ -1,14 +1,14 @@
 import { Cell, CellLoop, Stream } from "sodiumjs";
-import { el, text, Widget } from "../../src/document";
+import { button, div, h1, text, Widget } from "../../src/document";
 import { type } from "../../src/document/attributes";
 
 export function controlsWidget(cCount: Cell<number>): Widget<Stream<number>> {
   return () => {
     const cLabel = cCount.map((count) => `Current value: ${count}`);
 
-    const [sub] = el("button", [type("button")], "-");
+    const [sub] = button([type("button")], "-");
     text(cLabel);
-    const [add] = el("button", [type("button")], "+");
+    const [add] = button([type("button")], "+");
 
     const sSub = sub.click.mapTo(-1);
     const sAdd = add.click.mapTo(1);
@@ -20,7 +20,7 @@ const switchWidget: Widget<Cell<boolean>> = () => {
   const cOn = new CellLoop<boolean>();
   const cButtonText = cOn.map<string>((on) => (on ? "disable" : "enable"));
 
-  const [on] = el("button", [type("button")], cButtonText);
+  const [on] = button([type("button")], cButtonText);
 
   cOn.loop(on.click.accum<boolean>(true, (_, b) => !b));
   return cOn;
@@ -31,9 +31,9 @@ export const appWidget: Widget<void> = () => {
   const cCount = new CellLoop<number>();
 
   // Render UI
-  el("h1", [], "Obligatory counter example");
-  const [, sDelta] = el("div", [], controlsWidget(cCount));
-  const [, cOn] = el("div", [], switchWidget);
+  h1([], "Obligatory counter example");
+  const [, sDelta] = div([], controlsWidget(cCount));
+  const [, cOn] = div([], switchWidget);
 
   // Setup event handlers. Note - we could have used sDelta.gate(cOn) to turn
   // the counter on / off, but doing it this way actually modifies the FRP
