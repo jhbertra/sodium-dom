@@ -21,11 +21,28 @@ export interface RemoveNodeInstruction {
 }
 
 /**
+ * An instruction to increment the current index by 1.
+ *
+ * If the current index already equals currentElement.childList.length, this is a no-op.
+ */
+export interface IncrementIndexInstruction {
+  readonly type: "IncrementIndex";
+}
+
+/**
  * An instruction to update the DOM builder's state.
  */
 export type DomBuilderInstruction =
+  | IncrementIndexInstruction
   | InsertElementInstruction
   | RemoveNodeInstruction;
+
+/**
+ * Create a IncrementIndexInstruction
+ */
+export function IncrementIndex(): DomBuilderInstruction {
+  return { type: "IncrementIndex" };
+}
 
 /**
  * Create an InsertElementInstruction
@@ -67,6 +84,9 @@ export function runDomBuilderInstruction(
   instruction: DomBuilderInstruction,
 ): void {
   switch (instruction.type) {
+    case "IncrementIndex":
+      runIncrementIndex(context);
+      break;
     case "InsertElement":
       runInsertElementInstruction(context, instruction.tag);
       break;
@@ -74,6 +94,14 @@ export function runDomBuilderInstruction(
       runRemoveNodeInstruction(context);
       break;
   }
+}
+
+function runIncrementIndex(context: DomBuilderContext): void {
+  const { currentElement, currentIndex } = context;
+  context.currentIndex = Math.min(
+    currentElement.childNodes.length,
+    currentIndex + 1,
+  );
 }
 
 function runInsertElementInstruction(

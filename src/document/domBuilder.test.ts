@@ -2,6 +2,7 @@ import {
   runDomBuilderInstruction,
   InsertElement,
   RemoveNode,
+  IncrementIndex,
 } from "./domBuilder";
 
 describe("runDomBuilderInstruction", () => {
@@ -84,6 +85,31 @@ describe("runDomBuilderInstruction", () => {
       expect(document.body.innerHTML).toMatchInlineSnapshot(
         `"<p></p><div><p id=\\"I should stay\\"></p><p></p></div>"`,
       );
+    });
+  });
+
+  describe("IncrementIndex", () => {
+    it("Increments the current index", () => {
+      document.body.innerHTML = "<div></div>";
+      const context = {
+        currentIndex: 0,
+        currentElement: document.body,
+        document: document,
+      };
+      const instruction = IncrementIndex();
+      runDomBuilderInstruction(context, instruction);
+      expect(context.currentIndex).toEqual(1);
+    });
+    it("Is a no-op if the current index is already the maximum", () => {
+      document.body.innerHTML = "<div></div>";
+      const context = {
+        currentIndex: 1,
+        currentElement: document.body,
+        document: document,
+      };
+      const instruction = IncrementIndex();
+      runDomBuilderInstruction(context, instruction);
+      expect(context.currentIndex).toEqual(1);
     });
   });
 });
