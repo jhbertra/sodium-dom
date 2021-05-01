@@ -12,6 +12,17 @@ export interface InsertElementInstruction {
 }
 
 /**
+ * An instruction to insert a text node into the DOM.
+ *
+ * It will insert the text node at the current index of the child list of the current element.
+ * If there is already a node at this index, the new text node will be placed before it.
+ */
+export interface InsertTextInstruction {
+  readonly type: "InsertText";
+  readonly content: string;
+}
+
+/**
  * An instruction to remove a node from the DOM.
  *
  * If there is no node at the current index in the current element's child list, nothing will be changed.
@@ -35,6 +46,7 @@ export interface IncrementIndexInstruction {
 export type DomBuilderInstruction =
   | IncrementIndexInstruction
   | InsertElementInstruction
+  | InsertTextInstruction
   | RemoveNodeInstruction;
 
 /**
@@ -49,6 +61,13 @@ export function IncrementIndex(): DomBuilderInstruction {
  */
 export function InsertElement(tag: Tag): DomBuilderInstruction {
   return { type: "InsertElement", tag };
+}
+
+/**
+ * Create an InsertTextInstruction
+ */
+export function InsertText(content: string): DomBuilderInstruction {
+  return { type: "InsertText", content };
 }
 
 /**
@@ -90,6 +109,9 @@ export function runDomBuilderInstruction(
     case "InsertElement":
       runInsertElementInstruction(context, instruction.tag);
       break;
+    case "InsertText":
+      runInsertTextInstruction(context, instruction.content);
+      break;
     case "RemoveNode":
       runRemoveNodeInstruction(context);
       break;
@@ -112,6 +134,16 @@ function runInsertElementInstruction(
   const element = document.createElement(tag);
   const nodeAtIndex = currentElement.childNodes[currentIndex] ?? null;
   currentElement.insertBefore(element, nodeAtIndex);
+}
+
+function runInsertTextInstruction(
+  context: DomBuilderContext,
+  content: string,
+): void {
+  const { document, currentElement, currentIndex } = context;
+  const text = document.createTextNode(content);
+  const nodeAtIndex = currentElement.childNodes[currentIndex] ?? null;
+  currentElement.insertBefore(text, nodeAtIndex);
 }
 
 function runRemoveNodeInstruction(context: DomBuilderContext): void {

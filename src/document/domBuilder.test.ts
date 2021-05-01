@@ -3,6 +3,7 @@ import {
   InsertElement,
   RemoveNode,
   IncrementIndex,
+  InsertText,
 } from "./domBuilder";
 
 describe("runDomBuilderInstruction", () => {
@@ -46,6 +47,45 @@ describe("runDomBuilderInstruction", () => {
     });
   });
 
+  describe("InsertText", () => {
+    it("Appends the text to an empty document", () => {
+      document.body.innerHTML = "";
+      const context = {
+        currentIndex: 0,
+        currentElement: document.body,
+        document: document,
+      };
+      const instruction = InsertText("Hello, world");
+      runDomBuilderInstruction(context, instruction);
+      expect(document.body.innerHTML).toMatchInlineSnapshot(`"Hello, world"`);
+    });
+    it("Inserts the correct type of element at the current index", () => {
+      document.body.innerHTML = "<div></div>";
+      const context = {
+        currentIndex: 0,
+        currentElement: document.body,
+        document: document,
+      };
+      const instruction = InsertText("Hello, world");
+      runDomBuilderInstruction(context, instruction);
+      expect(document.body.innerHTML).toMatchInlineSnapshot(
+        `"Hello, world<div></div>"`,
+      );
+    });
+    it("Appends into the correct element", () => {
+      document.body.innerHTML = "<p></p><div></div>";
+      const context = {
+        currentIndex: 0,
+        currentElement: document.querySelector("div") as HTMLElement,
+        document: document,
+      };
+      const instruction = InsertText("Hello, world");
+      runDomBuilderInstruction(context, instruction);
+      expect(document.body.innerHTML).toMatchInlineSnapshot(
+        `"<p></p><div>Hello, world</div>"`,
+      );
+    });
+  });
   describe("RemoveNode", () => {
     it("Removes the node at the current index", () => {
       document.body.innerHTML = "<div></div>";
