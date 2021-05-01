@@ -12,15 +12,33 @@ export interface InsertElementInstruction {
 }
 
 /**
+ * An instruction to remove a node from the DOM.
+ *
+ * If there is no node at the current index in the current element's child list, nothing will be changed.
+ */
+export interface RemoveNodeInstruction {
+  readonly type: "RemoveNode";
+}
+
+/**
  * An instruction to update the DOM builder's state.
  */
-export type DomBuilderInstruction = InsertElementInstruction;
+export type DomBuilderInstruction =
+  | InsertElementInstruction
+  | RemoveNodeInstruction;
 
 /**
  * Create an InsertElementInstruction
  */
 export function InsertElement(tag: Tag): DomBuilderInstruction {
   return { type: "InsertElement", tag };
+}
+
+/**
+ * Create a RemoveNodeInstruction
+ */
+export function RemoveNode(): DomBuilderInstruction {
+  return { type: "RemoveNode" };
 }
 
 /**
@@ -50,13 +68,26 @@ export function runDomBuilderInstruction(
 ): void {
   switch (instruction.type) {
     case "InsertElement":
-      runInsertInstruction(context, instruction.tag);
+      runInsertElementInstruction(context, instruction.tag);
+      break;
+    case "RemoveNode":
+      runRemoveNodeInstruction(context);
+      break;
   }
 }
 
-function runInsertInstruction(context: DomBuilderContext, tag: Tag): void {
+function runInsertElementInstruction(
+  context: DomBuilderContext,
+  tag: Tag,
+): void {
   const { document, currentElement, currentIndex } = context;
   const element = document.createElement(tag);
   const nodeAtIndex = currentElement.childNodes[currentIndex] ?? null;
   currentElement.insertBefore(element, nodeAtIndex);
+}
+
+function runRemoveNodeInstruction(context: DomBuilderContext): void {
+  const { currentElement, currentIndex } = context;
+  const nodeAtIndex = currentElement.childNodes[currentIndex] ?? null;
+  nodeAtIndex?.remove();
 }
