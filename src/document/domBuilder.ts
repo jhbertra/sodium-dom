@@ -1,3 +1,4 @@
+import { CleanupTask } from "../utils";
 import { Tag } from "./core";
 
 /*
@@ -46,6 +47,10 @@ interface PopInstruction {
   readonly type: "Pop";
 }
 
+interface PutInstruction {
+  readonly type: "Put";
+}
+
 /**
  * An instruction to update the DOM builder's state.
  */
@@ -57,6 +62,7 @@ export type DomBuilderInstruction =
   | InsertTextInstruction
   | PushInstruction
   | PopInstruction
+  | PutInstruction
   | RemoveNodeInstruction
   | SetTextInstruction;
 
@@ -137,6 +143,13 @@ export function Pop(): DomBuilderInstruction {
 }
 
 /**
+ * An instruction to put the contents of the register at the cursor position.
+ */
+export function Put(): DomBuilderInstruction {
+  return { type: "Put" };
+}
+
+/**
  * An instruction to set the content of the text node under the cursor.
  *
  * Throws an exception if the cursor is in span mode, or if it is not currently over a text node.
@@ -182,9 +195,9 @@ function CursorSpan(start: number, end: number): Cursor {
 }
 
 /**
- * The state of a DOM builder.
+ * The state of a DOM builder while executing a transaction.
  */
-interface DomBuilderContext {
+interface DomTransactionState {
   /**
    * The the child or children currently under focus.
    */
@@ -204,11 +217,16 @@ interface DomBuilderContext {
   /**
    * The stack of contexts created by descending into child elements.
    */
-  readonly stack: DomBuilderContext[];
+  readonly stack: DomTransactionState[];
+  /**
+   * A collection of cleanup tasks which will revert the DOM to the state it was
+   * in before the transaction was run.
+   */
+  readonly rollbackStack: CleanupTask[];
 }
 
 class InternalDomBuilderException extends Error {
-  constructor(message: string, public readonly context: DomBuilderContext) {
+  constructor(message: string, public readonly context: DomTransactionState) {
     super(message);
   }
 }
@@ -216,7 +234,7 @@ class InternalDomBuilderException extends Error {
 export class DomBuilderException extends InternalDomBuilderException {
   constructor(
     message: string,
-    public readonly context: DomBuilderContext,
+    public readonly context: DomTransactionState,
     public readonly instructions: DomBuilderInstruction[],
   ) {
     super(message, context);
@@ -224,26 +242,34 @@ export class DomBuilderException extends InternalDomBuilderException {
 }
 
 /*
- * Instruction handlers
+ * Transaction handlers
  */
 
-export function runDomBuilderInstructions(
+export function commitDomTransaction(
   rootElement: HTMLElement,
   startAt: number,
   instructions: DomBuilderInstruction[],
-): void {
-  const context: DomBuilderContext = {
+): CleanupTask {
+  const context: DomTransactionState = {
     currentParent: rootElement,
     cursor: CursorSingle(startAt),
     document: rootElement.ownerDocument,
     register: [],
     stack: [],
+    rollbackStack: [],
+  };
+  const rollbackTransaction = () => {
+    while (context.rollbackStack.length > 0) {
+      context.rollbackStack.pop()?.();
+    }
   };
   try {
     instructions.forEach((instruction) =>
       runDomBuilderInstruction(context, instruction),
     );
+    return rollbackTransaction;
   } catch (e) {
+    rollbackTransaction();
     if (e instanceof InternalDomBuilderException) {
       throw new DomBuilderException(e.message, context, instructions);
     }
@@ -255,7 +281,7 @@ export function runDomBuilderInstructions(
  * Run an instruction and update the context.
  */
 function runDomBuilderInstruction(
-  context: DomBuilderContext,
+  context: DomTransactionState,
   instruction: DomBuilderInstruction,
 ): void {
   switch (instruction.type) {
@@ -280,6 +306,9 @@ function runDomBuilderInstruction(
     case "Pop":
       runPopInstruction(context);
       break;
+    case "Put":
+      runPutInstruction(context);
+      break;
     case "RemoveNode":
       runRemoveNodeInstruction(context);
       break;
@@ -290,7 +319,7 @@ function runDomBuilderInstruction(
 }
 
 function runMoveCursorInstruction(
-  context: DomBuilderContext,
+  context: DomTransactionState,
   delta: number,
 ): void {
   const { cursor } = context;
@@ -304,7 +333,7 @@ function runMoveCursorInstruction(
 }
 
 function runMoveCursorEndInstruction(
-  context: DomBuilderContext,
+  context: DomTransactionState,
   delta: number,
 ): void {
   const { cursor } = context;
@@ -322,7 +351,7 @@ function runMoveCursorEndInstruction(
 }
 
 function runMoveCursorStartInstruction(
-  context: DomBuilderContext,
+  context: DomTransactionState,
   delta: number,
 ): void {
   const { cursor } = context;
@@ -340,25 +369,25 @@ function runMoveCursorStartInstruction(
 }
 
 function runInsertElementInstruction(
-  context: DomBuilderContext,
+  context: DomTransactionState,
   tag: Tag,
 ): void {
   const { document } = context;
   const element = document.createElement(tag);
-  runInsert(context, element);
+  runInsert(context, [element]);
 }
 
 function runInsertTextInstruction(
-  context: DomBuilderContext,
+  context: DomTransactionState,
   content: string,
 ): void {
   const { document } = context;
   const text = document.createTextNode(content);
-  runInsert(context, text);
+  runInsert(context, [text]);
 }
 
 function runSetTextInstruction(
-  context: DomBuilderContext,
+  context: DomTransactionState,
   content: string,
 ): void {
   const { currentParent, cursor } = context;
@@ -378,7 +407,7 @@ function runSetTextInstruction(
   text.textContent = content;
 }
 
-function runPushInstruction(context: DomBuilderContext): void {
+function runPushInstruction(context: DomTransactionState): void {
   const { currentParent, cursor, stack } = context;
   if (cursor.type === "Span") {
     throw new InternalDomBuilderException(
@@ -398,7 +427,7 @@ function runPushInstruction(context: DomBuilderContext): void {
   context.cursor = CursorSingle(0);
 }
 
-function runPopInstruction(context: DomBuilderContext): void {
+function runPopInstruction(context: DomTransactionState): void {
   const { stack } = context;
   const newContext = stack.pop();
   if (newContext === undefined) {
@@ -411,8 +440,14 @@ function runPopInstruction(context: DomBuilderContext): void {
   context.cursor = newContext.cursor;
 }
 
-function runRemoveNodeInstruction(context: DomBuilderContext): void {
-  const { currentParent, cursor } = context;
+function runPutInstruction(context: DomTransactionState): void {
+  const { register } = context;
+  context.register = [];
+  runInsert(context, register);
+}
+
+function runRemoveNodeInstruction(context: DomTransactionState): void {
+  const { currentParent, cursor, rollbackStack } = context;
   const newRegister = [];
   const start = cursor.type === "Single" ? cursor.index : cursor.start;
   const end = cursor.type === "Single" ? cursor.index : cursor.end;
@@ -420,6 +455,12 @@ function runRemoveNodeInstruction(context: DomBuilderContext): void {
     const nodeUnderCursor = currentParent.childNodes[start];
     nodeUnderCursor?.remove();
     if (nodeUnderCursor) {
+      rollbackStack.push(() =>
+        currentParent.insertBefore(
+          nodeUnderCursor,
+          currentParent.childNodes[start] ?? null,
+        ),
+      );
       newRegister.push(nodeUnderCursor);
     }
   }
@@ -429,19 +470,22 @@ function runRemoveNodeInstruction(context: DomBuilderContext): void {
   context.cursor = CursorSingle(start);
 }
 
-function runInsert(context: DomBuilderContext, node: Node): void {
-  const { currentParent, cursor } = context;
+function runInsert(context: DomTransactionState, nodes: Node[]): void {
+  const { currentParent, cursor, rollbackStack } = context;
   if (cursor.type === "Single") {
     const nodeUnderCursor = currentParent.childNodes[cursor.index] ?? null;
-    currentParent.insertBefore(node, nodeUnderCursor);
+    nodes.forEach((node) => currentParent.insertBefore(node, nodeUnderCursor));
+    rollbackStack.push(() =>
+      nodes.forEach((node) => currentParent.removeChild(node)),
+    );
   } else {
     runRemoveNodeInstruction(context);
-    runInsert(context, node);
+    runInsert(context, nodes);
   }
 }
 
 function movePosition(
-  context: DomBuilderContext,
+  context: DomTransactionState,
   position: number,
   delta: number,
 ): number {

@@ -1,5 +1,5 @@
 import {
-  runDomBuilderInstructions,
+  commitDomTransaction,
   InsertElement,
   RemoveNode,
   InsertText,
@@ -10,12 +10,13 @@ import {
   SetText,
   Push,
   Pop,
+  Put,
 } from "./domBuilder";
 
 test("InsertElement", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(InsertElement("div"));
-  expect(document.body).toMatchInlineSnapshot(`
+  const finalBody = testDomTransaction(InsertElement("div"));
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <div />
     </body>
@@ -24,8 +25,11 @@ test("InsertElement", () => {
 
 test("InsertElement; InsertElement", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(InsertElement("div"), InsertElement("p"));
-  expect(document.body).toMatchInlineSnapshot(`
+  const finalBody = testDomTransaction(
+    InsertElement("div"),
+    InsertElement("p"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <p />
       <div />
@@ -35,14 +39,18 @@ test("InsertElement; InsertElement", () => {
 
 test("InsertElement; RemoveNode", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(InsertElement("div"), RemoveNode());
-  expect(document.body).toMatchInlineSnapshot(`<body />`);
+  const finalBody = testDomTransaction(InsertElement("div"), RemoveNode());
+  expect(finalBody).toMatchInlineSnapshot(`<body />`);
 });
 
 test("InsertElement; Move +1; InsertElement", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(InsertElement("div"), MoveCursor(1), InsertElement("p"));
-  expect(document.body).toMatchInlineSnapshot(`
+  const finalBody = testDomTransaction(
+    InsertElement("div"),
+    MoveCursor(1),
+    InsertElement("p"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <div />
       <p />
@@ -52,13 +60,13 @@ test("InsertElement; Move +1; InsertElement", () => {
 
 test("InsertElement; Move +1; InsertElement; RemoveNode", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(
+  const finalBody = testDomTransaction(
     InsertElement("div"),
     MoveCursor(1),
     InsertElement("p"),
     RemoveNode(),
   );
-  expect(document.body).toMatchInlineSnapshot(`
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <div />
     </body>
@@ -67,14 +75,14 @@ test("InsertElement; Move +1; InsertElement; RemoveNode", () => {
 
 test("InsertElement; Move +1; InsertElement; Move -1; RemoveNode", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(
+  const finalBody = testDomTransaction(
     InsertElement("div"),
     MoveCursor(1),
     InsertElement("p"),
     MoveCursor(-1),
     RemoveNode(),
   );
-  expect(document.body).toMatchInlineSnapshot(`
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <p />
     </body>
@@ -83,14 +91,14 @@ test("InsertElement; Move +1; InsertElement; Move -1; RemoveNode", () => {
 
 test("InsertElement; Move +2; InsertElement; Move -1; RemoveNode", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(
+  const finalBody = testDomTransaction(
     InsertElement("div"),
     MoveCursor(2),
     InsertElement("p"),
     MoveCursor(-1),
     RemoveNode(),
   );
-  expect(document.body).toMatchInlineSnapshot(`
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <p />
     </body>
@@ -99,14 +107,14 @@ test("InsertElement; Move +2; InsertElement; Move -1; RemoveNode", () => {
 
 test("InsertElement; Move +1; InsertElement; Move -2; RemoveNode", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(
+  const finalBody = testDomTransaction(
     InsertElement("div"),
     MoveCursor(2),
     InsertElement("p"),
     MoveCursor(-1),
     RemoveNode(),
   );
-  expect(document.body).toMatchInlineSnapshot(`
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <p />
     </body>
@@ -115,8 +123,8 @@ test("InsertElement; Move +1; InsertElement; Move -2; RemoveNode", () => {
 
 test("InsertText", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(InsertText("Hello, world"));
-  expect(document.body).toMatchInlineSnapshot(`
+  const finalBody = testDomTransaction(InsertText("Hello, world"));
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       Hello, world
     </body>
@@ -125,14 +133,14 @@ test("InsertText", () => {
 
 test("InsertElement; Move +1; InsertText; Move -1; RemoveNode", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(
+  const finalBody = testDomTransaction(
     InsertElement("div"),
     MoveCursor(1),
     InsertText("Hello, world"),
     MoveCursor(-1),
     RemoveNode(),
   );
-  expect(document.body).toMatchInlineSnapshot(`
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       Hello, world
     </body>
@@ -141,14 +149,14 @@ test("InsertElement; Move +1; InsertText; Move -1; RemoveNode", () => {
 
 test("InsertText; Move +1; InsertElement; Move -1; RemoveNode", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(
+  const finalBody = testDomTransaction(
     InsertText("Hello, world"),
     MoveCursor(1),
     InsertElement("div"),
     MoveCursor(-1),
     RemoveNode(),
   );
-  expect(document.body).toMatchInlineSnapshot(`
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <div />
     </body>
@@ -158,8 +166,8 @@ test("InsertText; Move +1; InsertElement; Move -1; RemoveNode", () => {
 test("MoveCursorEnd +3; InsertElement", () => {
   document.body.innerHTML =
     "<a></a><p></p><span></span><article></article><section></section>";
-  runDomBuilderTest(MoveCursorEnd(3), InsertElement("div"));
-  expect(document.body).toMatchInlineSnapshot(`
+  const finalBody = testDomTransaction(MoveCursorEnd(3), InsertElement("div"));
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <div />
       <section />
@@ -170,8 +178,8 @@ test("MoveCursorEnd +3; InsertElement", () => {
 test("MoveCursorEnd +3; RemoveNode", () => {
   document.body.innerHTML =
     "<a></a><p></p><span></span><article></article><section></section>";
-  runDomBuilderTest(MoveCursorEnd(3), RemoveNode());
-  expect(document.body).toMatchInlineSnapshot(`
+  const finalBody = testDomTransaction(MoveCursorEnd(3), RemoveNode());
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <section />
     </body>
@@ -181,8 +189,12 @@ test("MoveCursorEnd +3; RemoveNode", () => {
 test("MoveCursor +1; MoveCursorEnd +2; InsertElement", () => {
   document.body.innerHTML =
     "<a></a><p></p><span></span><article></article><section></section>";
-  runDomBuilderTest(MoveCursor(1), MoveCursorEnd(2), InsertElement("div"));
-  expect(document.body).toMatchInlineSnapshot(`
+  const finalBody = testDomTransaction(
+    MoveCursor(1),
+    MoveCursorEnd(2),
+    InsertElement("div"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <a />
       <div />
@@ -194,8 +206,12 @@ test("MoveCursor +1; MoveCursorEnd +2; InsertElement", () => {
 test("MoveCursor +1; MoveCursorEnd +2; RemoveNode", () => {
   document.body.innerHTML =
     "<a></a><p></p><span></span><article></article><section></section>";
-  runDomBuilderTest(MoveCursor(1), MoveCursorEnd(2), RemoveNode());
-  expect(document.body).toMatchInlineSnapshot(`
+  const finalBody = testDomTransaction(
+    MoveCursor(1),
+    MoveCursorEnd(2),
+    RemoveNode(),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <a />
       <section />
@@ -206,8 +222,12 @@ test("MoveCursor +1; MoveCursorEnd +2; RemoveNode", () => {
 test("MoveCursor +2; MoveCursorEnd -1; InsertElement", () => {
   document.body.innerHTML =
     "<a></a><p></p><span></span><article></article><section></section>";
-  runDomBuilderTest(MoveCursor(2), MoveCursorEnd(-1), InsertElement("div"));
-  expect(document.body).toMatchInlineSnapshot(`
+  const finalBody = testDomTransaction(
+    MoveCursor(2),
+    MoveCursorEnd(-1),
+    InsertElement("div"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <a />
       <div />
@@ -220,8 +240,12 @@ test("MoveCursor +2; MoveCursorEnd -1; InsertElement", () => {
 test("MoveCursor +2; MoveCursorEnd -1; InsertElement", () => {
   document.body.innerHTML =
     "<a></a><p></p><span></span><article></article><section></section>";
-  runDomBuilderTest(MoveCursor(2), MoveCursorEnd(-1), RemoveNode());
-  expect(document.body).toMatchInlineSnapshot(`
+  const finalBody = testDomTransaction(
+    MoveCursor(2),
+    MoveCursorEnd(-1),
+    RemoveNode(),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <a />
       <article />
@@ -233,8 +257,12 @@ test("MoveCursor +2; MoveCursorEnd -1; InsertElement", () => {
 test("MoveCursorEnd +3; MoveCursorStart +1; RemoveNode", () => {
   document.body.innerHTML =
     "<a></a><p></p><span></span><article></article><section></section>";
-  runDomBuilderTest(MoveCursorEnd(3), MoveCursorStart(1), RemoveNode());
-  expect(document.body).toMatchInlineSnapshot(`
+  const finalBody = testDomTransaction(
+    MoveCursorEnd(3),
+    MoveCursorStart(1),
+    RemoveNode(),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <a />
       <section />
@@ -245,8 +273,12 @@ test("MoveCursorEnd +3; MoveCursorStart +1; RemoveNode", () => {
 test("MoveCursorEnd +3; MoveCursorStart +4; RemoveNode", () => {
   document.body.innerHTML =
     "<a></a><p></p><span></span><article></article><section></section>";
-  runDomBuilderTest(MoveCursorEnd(3), MoveCursorStart(4), RemoveNode());
-  expect(document.body).toMatchInlineSnapshot(`
+  const finalBody = testDomTransaction(
+    MoveCursorEnd(3),
+    MoveCursorStart(4),
+    RemoveNode(),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <a />
       <p />
@@ -258,12 +290,12 @@ test("MoveCursorEnd +3; MoveCursorStart +4; RemoveNode", () => {
 test("MoveCursorEnd +3; InsertElement; InsertElement;", () => {
   document.body.innerHTML =
     "<a></a><p></p><span></span><article></article><section></section>";
-  runDomBuilderTest(
+  const finalBody = testDomTransaction(
     MoveCursorEnd(3),
     InsertElement("div"),
     InsertElement("div"),
   );
-  expect(document.body).toMatchInlineSnapshot(`
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <div />
       <div />
@@ -274,8 +306,11 @@ test("MoveCursorEnd +3; InsertElement; InsertElement;", () => {
 
 test("InsertText; SetText", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(InsertText("Hello, world"), SetText("Hello, universe"));
-  expect(document.body).toMatchInlineSnapshot(`
+  const finalBody = testDomTransaction(
+    InsertText("Hello, world"),
+    SetText("Hello, universe"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       Hello, universe
     </body>
@@ -285,7 +320,7 @@ test("InsertText; SetText", () => {
 test("InsertText; MoveCursor +1; InsertElement; SetText", () => {
   document.body.innerHTML = "";
   expect(() =>
-    runDomBuilderTest(
+    testDomTransaction(
       InsertText("Hello, world"),
       MoveCursor(1),
       InsertElement("div"),
@@ -297,7 +332,7 @@ test("InsertText; MoveCursor +1; InsertElement; SetText", () => {
 test("InsertText; MoveCursorEnd +1; SetText", () => {
   document.body.innerHTML = "";
   expect(() =>
-    runDomBuilderTest(
+    testDomTransaction(
       InsertText("Hello, world"),
       MoveCursorEnd(1),
       SetText("Hello, universe"),
@@ -309,8 +344,12 @@ test("InsertText; MoveCursorEnd +1; SetText", () => {
 
 test("InsertElement; Push; InsertElement", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(InsertElement("div"), Push(), InsertElement("p"));
-  expect(document.body).toMatchInlineSnapshot(`
+  const finalBody = testDomTransaction(
+    InsertElement("div"),
+    Push(),
+    InsertElement("p"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <div>
         <p />
@@ -321,7 +360,7 @@ test("InsertElement; Push; InsertElement", () => {
 
 test("InsertElement; Push; InsertElement; Pop; MoveCursor +1; InsertElement", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(
+  const finalBody = testDomTransaction(
     InsertElement("div"),
     Push(),
     InsertElement("p"),
@@ -329,7 +368,7 @@ test("InsertElement; Push; InsertElement; Pop; MoveCursor +1; InsertElement", ()
     MoveCursor(1),
     InsertElement("article"),
   );
-  expect(document.body).toMatchInlineSnapshot(`
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <div>
         <p />
@@ -342,7 +381,7 @@ test("InsertElement; Push; InsertElement; Pop; MoveCursor +1; InsertElement", ()
 test("InsertElement; Push; InsertElement; Pop; MoveCursor +1; Push", () => {
   document.body.innerHTML = "";
   expect(() =>
-    runDomBuilderTest(
+    testDomTransaction(
       InsertElement("div"),
       Push(),
       InsertElement("p"),
@@ -358,7 +397,7 @@ test("InsertElement; Push; InsertElement; Pop; MoveCursor +1; Push", () => {
 test("InsertElement; Push; InsertElement; Pop; MoveCursorEnd +1; Push", () => {
   document.body.innerHTML = "";
   expect(() =>
-    runDomBuilderTest(
+    testDomTransaction(
       InsertElement("div"),
       Push(),
       InsertElement("p"),
@@ -373,7 +412,7 @@ test("InsertElement; Push; InsertElement; Pop; MoveCursorEnd +1; Push", () => {
 
 test("Build a realistic static document", () => {
   document.body.innerHTML = "";
-  runDomBuilderTest(
+  const finalBody = testDomTransaction(
     InsertElement("header"),
     Push(),
     InsertElement("h1"),
@@ -400,7 +439,7 @@ test("Build a realistic static document", () => {
       "Good thing this is not a public API, and that computers are excellent at performing tedious, error-prone tasks.",
     ),
   );
-  expect(document.body).toMatchInlineSnapshot(`
+  expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <header>
         <h1>
@@ -422,6 +461,96 @@ test("Build a realistic static document", () => {
   `);
 });
 
-function runDomBuilderTest(...instructions: DomBuilderInstruction[]) {
-  runDomBuilderInstructions(document.body, 0, instructions);
+test("Cut span, Put single", () => {
+  document.body.innerHTML = "<h1/><h2/><h3/><h4/><h5/>";
+  const finalBody = testDomTransaction(
+    MoveCursorEnd(3),
+    MoveCursorStart(1),
+    RemoveNode(),
+    MoveCursor(-1),
+    Put(),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <h2 />
+      <h3 />
+      <h4 />
+      <h1 />
+      <h5 />
+    </body>
+  `);
+});
+
+test("Cut single, Put single", () => {
+  document.body.innerHTML = "<h1/><h2/><h3/><h4/><h5/>";
+  const finalBody = testDomTransaction(
+    MoveCursor(3),
+    RemoveNode(),
+    MoveCursor(-3),
+    Put(),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <h4 />
+      <h1 />
+      <h2 />
+      <h3 />
+      <h5 />
+    </body>
+  `);
+});
+
+test("Cut single, Put span, Put single", () => {
+  document.body.innerHTML = "<h1/><h2/><h3/><h4/><h5/>";
+  const finalBody = testDomTransaction(
+    MoveCursor(3),
+    RemoveNode(),
+    MoveCursorStart(-3),
+    MoveCursorEnd(-2),
+    Put(),
+    MoveCursor(3),
+    Put(),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <h4 />
+      <h3 />
+      <h5 />
+      <h1 />
+      <h2 />
+    </body>
+  `);
+});
+
+test("Cut span, Put span", () => {
+  document.body.innerHTML = "<h1/><h2/><h3/><h4/><h5/>";
+  const finalBody = testDomTransaction(
+    MoveCursorEnd(3),
+    MoveCursorStart(2),
+    RemoveNode(),
+    MoveCursorStart(-2),
+    MoveCursorEnd(-1),
+    Put(),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <h3 />
+      <h4 />
+      <h5 />
+    </body>
+  `);
+});
+
+function testDomTransaction(
+  ...instructions: DomBuilderInstruction[]
+): HTMLElement {
+  const initialBody = document.body.cloneNode(true) as HTMLElement;
+  try {
+    const rollback = commitDomTransaction(document.body, 0, instructions);
+    const finalBody = document.body.cloneNode(true) as HTMLElement;
+    rollback();
+    return finalBody;
+  } finally {
+    expect(document.body).toEqual(initialBody);
+  }
 }
