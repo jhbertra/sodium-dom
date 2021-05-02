@@ -7,6 +7,7 @@ import {
   MoveCursor,
   MoveCursorEnd,
   MoveCursorStart,
+  SetText,
 } from "./domBuilder";
 
 test("InsertElement", () => {
@@ -267,6 +268,41 @@ test("MoveCursorEnd +3; InsertElement; InsertElement;", () => {
       <section />
     </body>
   `);
+});
+
+test("InsertText; SetText", () => {
+  document.body.innerHTML = "";
+  runDomBuilderTest(InsertText("Hello, world"), SetText("Hello, universe"));
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      Hello, universe
+    </body>
+  `);
+});
+
+test("InsertText; MoveCursor +1; InsertElement; SetText", () => {
+  document.body.innerHTML = "";
+  expect(() =>
+    runDomBuilderTest(
+      InsertText("Hello, world"),
+      MoveCursor(1),
+      InsertElement("div"),
+      SetText("Hello, universe"),
+    ),
+  ).toThrowErrorMatchingInlineSnapshot(`"Cannot set text on a non-text node"`);
+});
+
+test("InsertText; MoveCursorEnd +1; SetText", () => {
+  document.body.innerHTML = "";
+  expect(() =>
+    runDomBuilderTest(
+      InsertText("Hello, world"),
+      MoveCursorEnd(1),
+      SetText("Hello, universe"),
+    ),
+  ).toThrowErrorMatchingInlineSnapshot(
+    `"Cannot set text when cursor is in span mode"`,
+  );
 });
 
 function runDomBuilderTest(...instructions: DomBuilderInstruction[]) {

@@ -14,6 +14,11 @@ interface InsertTextInstruction {
   readonly content: string;
 }
 
+interface SetTextInstruction {
+  readonly type: "SetText";
+  readonly content: string;
+}
+
 interface RemoveNodeInstruction {
   readonly type: "RemoveNode";
 }
@@ -42,6 +47,7 @@ export type DomBuilderInstruction =
   | MoveCursorStartInstruction
   | InsertElementInstruction
   | InsertTextInstruction
+  | SetTextInstruction
   | RemoveNodeInstruction;
 
 /**
@@ -102,6 +108,15 @@ export function InsertText(content: string): DomBuilderInstruction {
 }
 
 /**
+ * An instruction to set the content of the text node under the cursor.
+ *
+ * Throws an exception if the cursor is in span mode, or if it is not currently over a text node.
+ */
+export function SetText(content: string): DomBuilderInstruction {
+  return { type: "SetText", content };
+}
+
+/**
  * An instruction to remove a node from the DOM.
  *
  * If there is no node under the cursor in the current element's child list, nothing will be changed.
@@ -116,31 +131,31 @@ export function RemoveNode(): DomBuilderInstruction {
  * State types
  */
 
-export interface CursorSingle {
+interface CursorSingle {
   readonly type: "Single";
   index: number;
 }
 
-export interface CursorSpan {
+interface CursorSpan {
   readonly type: "Span";
   start: number;
   end: number;
 }
 
-export type Cursor = CursorSingle | CursorSpan;
+type Cursor = CursorSingle | CursorSpan;
 
-export function CursorSingle(index: number): Cursor {
+function CursorSingle(index: number): Cursor {
   return { type: "Single", index };
 }
 
-export function CursorSpan(start: number, end: number): Cursor {
+function CursorSpan(start: number, end: number): Cursor {
   return { type: "Span", start, end };
 }
 
 /**
  * The state of a DOM builder.
  */
-export interface DomBuilderContext {
+interface DomBuilderContext {
   /**
    * The the child or children currently under focus.
    */
@@ -159,6 +174,22 @@ export interface DomBuilderContext {
   register: Node[];
 }
 
+class InternalDomBuilderException extends Error {
+  constructor(message: string, public readonly context: DomBuilderContext) {
+    super(message);
+  }
+}
+
+export class DomBuilderException extends InternalDomBuilderException {
+  constructor(
+    message: string,
+    public readonly context: DomBuilderContext,
+    public readonly instructions: DomBuilderInstruction[],
+  ) {
+    super(message, context);
+  }
+}
+
 /*
  * Instruction handlers
  */
@@ -174,9 +205,16 @@ export function runDomBuilderInstructions(
     currentParent: rootElement,
     cursor: CursorSingle(startAt),
   };
-  instructions.forEach((instruction) =>
-    runDomBuilderInstruction(context, instruction),
-  );
+  try {
+    instructions.forEach((instruction) =>
+      runDomBuilderInstruction(context, instruction),
+    );
+  } catch (e) {
+    if (e instanceof InternalDomBuilderException) {
+      throw new DomBuilderException(e.message, context, instructions);
+    }
+    throw e;
+  }
 }
 
 /**
@@ -201,6 +239,9 @@ function runDomBuilderInstruction(
       break;
     case "InsertText":
       runInsertTextInstruction(context, instruction.content);
+      break;
+    case "SetText":
+      runSetTextInstruction(context, instruction.content);
       break;
     case "RemoveNode":
       runRemoveNodeInstruction(context);
@@ -265,6 +306,27 @@ function runInsertTextInstruction(
   const { document } = context;
   const text = document.createTextNode(content);
   runInsert(context, text);
+}
+
+function runSetTextInstruction(
+  context: DomBuilderContext,
+  content: string,
+): void {
+  const { currentParent, cursor } = context;
+  if (cursor.type === "Span") {
+    throw new InternalDomBuilderException(
+      "Cannot set text when cursor is in span mode",
+      context,
+    );
+  }
+  const text = currentParent.childNodes[cursor.index];
+  if (!(text instanceof Text)) {
+    throw new InternalDomBuilderException(
+      "Cannot set text on a non-text node",
+      context,
+    );
+  }
+  text.textContent = content;
 }
 
 function runRemoveNodeInstruction(context: DomBuilderContext): void {
