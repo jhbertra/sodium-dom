@@ -2,7 +2,7 @@ import {
   runDomBuilderInstruction,
   InsertElement,
   RemoveNode,
-  IncrementIndex,
+  IncrementCursor,
   InsertText,
 } from "./domBuilder";
 
@@ -11,19 +11,19 @@ describe("runDomBuilderInstruction", () => {
     it("Appends the correct type of element to an empty document", () => {
       document.body.innerHTML = "";
       const context = {
-        currentIndex: 0,
-        currentElement: document.body,
+        cursor: 0,
+        currentParent: document.body,
         document: document,
       };
       const instruction = InsertElement("div");
       runDomBuilderInstruction(context, instruction);
       expect(document.body.innerHTML).toMatchInlineSnapshot(`"<div></div>"`);
     });
-    it("Inserts the correct type of element at the current index", () => {
+    it("Inserts the correct type of element at the cursor position", () => {
       document.body.innerHTML = "<div></div>";
       const context = {
-        currentIndex: 0,
-        currentElement: document.body,
+        cursor: 0,
+        currentParent: document.body,
         document: document,
       };
       const instruction = InsertElement("p");
@@ -35,8 +35,8 @@ describe("runDomBuilderInstruction", () => {
     it("Appends into the correct element", () => {
       document.body.innerHTML = "<p></p><div></div>";
       const context = {
-        currentIndex: 0,
-        currentElement: document.querySelector("div") as HTMLElement,
+        cursor: 0,
+        currentParent: document.querySelector("div") as HTMLElement,
         document: document,
       };
       const instruction = InsertElement("p");
@@ -51,19 +51,19 @@ describe("runDomBuilderInstruction", () => {
     it("Appends the text to an empty document", () => {
       document.body.innerHTML = "";
       const context = {
-        currentIndex: 0,
-        currentElement: document.body,
+        cursor: 0,
+        currentParent: document.body,
         document: document,
       };
       const instruction = InsertText("Hello, world");
       runDomBuilderInstruction(context, instruction);
       expect(document.body.innerHTML).toMatchInlineSnapshot(`"Hello, world"`);
     });
-    it("Inserts the correct type of element at the current index", () => {
+    it("Inserts the correct type of element at the cursor position", () => {
       document.body.innerHTML = "<div></div>";
       const context = {
-        currentIndex: 0,
-        currentElement: document.body,
+        cursor: 0,
+        currentParent: document.body,
         document: document,
       };
       const instruction = InsertText("Hello, world");
@@ -75,8 +75,8 @@ describe("runDomBuilderInstruction", () => {
     it("Appends into the correct element", () => {
       document.body.innerHTML = "<p></p><div></div>";
       const context = {
-        currentIndex: 0,
-        currentElement: document.querySelector("div") as HTMLElement,
+        cursor: 0,
+        currentParent: document.querySelector("div") as HTMLElement,
         document: document,
       };
       const instruction = InsertText("Hello, world");
@@ -86,12 +86,13 @@ describe("runDomBuilderInstruction", () => {
       );
     });
   });
+
   describe("RemoveNode", () => {
-    it("Removes the node at the current index", () => {
+    it("Removes the node at the cursor position", () => {
       document.body.innerHTML = "<div></div>";
       const context = {
-        currentIndex: 0,
-        currentElement: document.body,
+        cursor: 0,
+        currentParent: document.body,
         document: document,
       };
       const instruction = RemoveNode();
@@ -102,8 +103,8 @@ describe("runDomBuilderInstruction", () => {
       document.body.innerHTML =
         '<p></p><div><p id="I should stay"></p><p/></div>';
       const context = {
-        currentIndex: 1,
-        currentElement: document.querySelector("div") as HTMLElement,
+        cursor: 1,
+        currentParent: document.querySelector("div") as HTMLElement,
         document: document,
       };
       const instruction = RemoveNode();
@@ -112,12 +113,12 @@ describe("runDomBuilderInstruction", () => {
         `"<p></p><div><p id=\\"I should stay\\"></p></div>"`,
       );
     });
-    it("Is a no-op if the current index is empty", () => {
+    it("Is a no-op if the cursor position is empty", () => {
       document.body.innerHTML =
         '<p></p><div><p id="I should stay"></p><p/></div>';
       const context = {
-        currentIndex: 2,
-        currentElement: document.querySelector("div") as HTMLElement,
+        cursor: 2,
+        currentParent: document.querySelector("div") as HTMLElement,
         document: document,
       };
       const instruction = RemoveNode();
@@ -128,28 +129,28 @@ describe("runDomBuilderInstruction", () => {
     });
   });
 
-  describe("IncrementIndex", () => {
-    it("Increments the current index", () => {
+  describe("IncrementCursor", () => {
+    it("Increments the cursor", () => {
       document.body.innerHTML = "<div></div>";
       const context = {
-        currentIndex: 0,
-        currentElement: document.body,
+        cursor: 0,
+        currentParent: document.body,
         document: document,
       };
-      const instruction = IncrementIndex();
+      const instruction = IncrementCursor();
       runDomBuilderInstruction(context, instruction);
-      expect(context.currentIndex).toEqual(1);
+      expect(context.cursor).toEqual(1);
     });
-    it("Is a no-op if the current index is already the maximum", () => {
+    it("Is a no-op if the cursor is already the maximum", () => {
       document.body.innerHTML = "<div></div>";
       const context = {
-        currentIndex: 1,
-        currentElement: document.body,
+        cursor: 1,
+        currentParent: document.body,
         document: document,
       };
-      const instruction = IncrementIndex();
+      const instruction = IncrementCursor();
       runDomBuilderInstruction(context, instruction);
-      expect(context.currentIndex).toEqual(1);
+      expect(context.cursor).toEqual(1);
     });
   });
 });

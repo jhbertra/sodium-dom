@@ -34,10 +34,10 @@ export interface RemoveNodeInstruction {
 /**
  * An instruction to increment the current index by 1.
  *
- * If the current index already equals currentElement.childList.length, this is a no-op.
+ * If the current index already equals currentParent.childList.length, this is a no-op.
  */
 export interface IncrementIndexInstruction {
-  readonly type: "IncrementIndex";
+  readonly type: "IncrementCursor";
 }
 
 /**
@@ -52,8 +52,8 @@ export type DomBuilderInstruction =
 /**
  * Create a IncrementIndexInstruction
  */
-export function IncrementIndex(): DomBuilderInstruction {
-  return { type: "IncrementIndex" };
+export function IncrementCursor(): DomBuilderInstruction {
+  return { type: "IncrementCursor" };
 }
 
 /**
@@ -82,13 +82,13 @@ export function RemoveNode(): DomBuilderInstruction {
  */
 export interface DomBuilderContext {
   /**
-   * The index currently under focus.
+   * The index of the current element's child node list currently under focus.
    */
-  currentIndex: number;
+  cursor: number;
   /**
-   * The current element which nodes will be appended to as children.
+   * The element whose child nodes are being traversed.
    */
-  currentElement: HTMLElement;
+  currentParent: HTMLElement;
   /**
    * The document.
    */
@@ -103,7 +103,7 @@ export function runDomBuilderInstruction(
   instruction: DomBuilderInstruction,
 ): void {
   switch (instruction.type) {
-    case "IncrementIndex":
+    case "IncrementCursor":
       runIncrementIndex(context);
       break;
     case "InsertElement":
@@ -119,35 +119,32 @@ export function runDomBuilderInstruction(
 }
 
 function runIncrementIndex(context: DomBuilderContext): void {
-  const { currentElement, currentIndex } = context;
-  context.currentIndex = Math.min(
-    currentElement.childNodes.length,
-    currentIndex + 1,
-  );
+  const { currentParent, cursor } = context;
+  context.cursor = Math.min(currentParent.childNodes.length, cursor + 1);
 }
 
 function runInsertElementInstruction(
   context: DomBuilderContext,
   tag: Tag,
 ): void {
-  const { document, currentElement, currentIndex } = context;
+  const { document, currentParent, cursor } = context;
   const element = document.createElement(tag);
-  const nodeAtIndex = currentElement.childNodes[currentIndex] ?? null;
-  currentElement.insertBefore(element, nodeAtIndex);
+  const nodeAtIndex = currentParent.childNodes[cursor] ?? null;
+  currentParent.insertBefore(element, nodeAtIndex);
 }
 
 function runInsertTextInstruction(
   context: DomBuilderContext,
   content: string,
 ): void {
-  const { document, currentElement, currentIndex } = context;
+  const { document, currentParent, cursor } = context;
   const text = document.createTextNode(content);
-  const nodeAtIndex = currentElement.childNodes[currentIndex] ?? null;
-  currentElement.insertBefore(text, nodeAtIndex);
+  const nodeAtIndex = currentParent.childNodes[cursor] ?? null;
+  currentParent.insertBefore(text, nodeAtIndex);
 }
 
 function runRemoveNodeInstruction(context: DomBuilderContext): void {
-  const { currentElement, currentIndex } = context;
-  const nodeAtIndex = currentElement.childNodes[currentIndex] ?? null;
+  const { currentParent, cursor } = context;
+  const nodeAtIndex = currentParent.childNodes[cursor] ?? null;
   nodeAtIndex?.remove();
 }
