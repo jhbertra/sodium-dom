@@ -8,6 +8,8 @@ import {
   MoveCursorEnd,
   MoveCursorStart,
   SetText,
+  Push,
+  Pop,
 } from "./domBuilder";
 
 test("InsertElement", () => {
@@ -303,6 +305,121 @@ test("InsertText; MoveCursorEnd +1; SetText", () => {
   ).toThrowErrorMatchingInlineSnapshot(
     `"Cannot set text when cursor is in span mode"`,
   );
+});
+
+test("InsertElement; Push; InsertElement", () => {
+  document.body.innerHTML = "";
+  runDomBuilderTest(InsertElement("div"), Push(), InsertElement("p"));
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <div>
+        <p />
+      </div>
+    </body>
+  `);
+});
+
+test("InsertElement; Push; InsertElement; Pop; MoveCursor +1; InsertElement", () => {
+  document.body.innerHTML = "";
+  runDomBuilderTest(
+    InsertElement("div"),
+    Push(),
+    InsertElement("p"),
+    Pop(),
+    MoveCursor(1),
+    InsertElement("article"),
+  );
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <div>
+        <p />
+      </div>
+      <article />
+    </body>
+  `);
+});
+
+test("InsertElement; Push; InsertElement; Pop; MoveCursor +1; Push", () => {
+  document.body.innerHTML = "";
+  expect(() =>
+    runDomBuilderTest(
+      InsertElement("div"),
+      Push(),
+      InsertElement("p"),
+      Pop(),
+      MoveCursor(1),
+      Push(),
+    ),
+  ).toThrowErrorMatchingInlineSnapshot(
+    `"Cannot push context when focused on a non-element node"`,
+  );
+});
+
+test("InsertElement; Push; InsertElement; Pop; MoveCursorEnd +1; Push", () => {
+  document.body.innerHTML = "";
+  expect(() =>
+    runDomBuilderTest(
+      InsertElement("div"),
+      Push(),
+      InsertElement("p"),
+      Pop(),
+      MoveCursorEnd(1),
+      Push(),
+    ),
+  ).toThrowErrorMatchingInlineSnapshot(
+    `"Cannot push context when cursor is in span mode"`,
+  );
+});
+
+test("Build a realistic static document", () => {
+  document.body.innerHTML = "";
+  runDomBuilderTest(
+    InsertElement("header"),
+    Push(),
+    InsertElement("h1"),
+    Push(),
+    InsertText("My awesome webpage"),
+    Pop(),
+    MoveCursor(1),
+    InsertElement("p"),
+    Push(),
+    InsertText("Isn't it beautiful?"),
+    Pop(),
+    Pop(),
+    MoveCursor(1),
+    InsertElement("main"),
+    Push(),
+    InsertElement("h1"),
+    Push(),
+    InsertText("Using the DOM builder sure is tedious and error-prone"),
+    Pop(),
+    MoveCursor(1),
+    InsertElement("p"),
+    Push(),
+    InsertText(
+      "Good thing this is not a public API, and that computers are excellent at performing tedious, error-prone tasks.",
+    ),
+  );
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <header>
+        <h1>
+          My awesome webpage
+        </h1>
+        <p>
+          Isn't it beautiful?
+        </p>
+      </header>
+      <main>
+        <h1>
+          Using the DOM builder sure is tedious and error-prone
+        </h1>
+        <p>
+          Good thing this is not a public API, and that computers are excellent at performing tedious, error-prone tasks.
+        </p>
+      </main>
+    </body>
+  `);
 });
 
 function runDomBuilderTest(...instructions: DomBuilderInstruction[]) {

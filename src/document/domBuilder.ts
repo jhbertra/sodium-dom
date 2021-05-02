@@ -38,6 +38,14 @@ interface MoveCursorStartInstruction {
   readonly delta: number;
 }
 
+interface PushInstruction {
+  readonly type: "Push";
+}
+
+interface PopInstruction {
+  readonly type: "Pop";
+}
+
 /**
  * An instruction to update the DOM builder's state.
  */
@@ -47,8 +55,10 @@ export type DomBuilderInstruction =
   | MoveCursorStartInstruction
   | InsertElementInstruction
   | InsertTextInstruction
-  | SetTextInstruction
-  | RemoveNodeInstruction;
+  | PushInstruction
+  | PopInstruction
+  | RemoveNodeInstruction
+  | SetTextInstruction;
 
 /**
  * An instruction to move the cursor.
@@ -105,6 +115,25 @@ export function InsertElement(tag: Tag): DomBuilderInstruction {
  */
 export function InsertText(content: string): DomBuilderInstruction {
   return { type: "InsertText", content };
+}
+
+/**
+ * An instruction to push the current context onto the stack and create a new one with the current
+ * focus as the parent.
+ *
+ * Throws an exception if the cursor is in span mode, or if it is not currently over an element.
+ */
+export function Push(): DomBuilderInstruction {
+  return { type: "Push" };
+}
+
+/**
+ * An instruction to pop a context from the stack and replace the current context with that one.
+ *
+ * Throws an exception if the stack is empty.
+ */
+export function Pop(): DomBuilderInstruction {
+  return { type: "Pop" };
 }
 
 /**
@@ -167,11 +196,15 @@ interface DomBuilderContext {
   /**
    * The document.
    */
-  document: Document;
+  readonly document: Document;
   /**
    * A collection of nodes that can be held in reserve to be put elsewhere.
    */
   register: Node[];
+  /**
+   * The stack of contexts created by descending into child elements.
+   */
+  readonly stack: DomBuilderContext[];
 }
 
 class InternalDomBuilderException extends Error {
@@ -200,10 +233,11 @@ export function runDomBuilderInstructions(
   instructions: DomBuilderInstruction[],
 ): void {
   const context: DomBuilderContext = {
-    register: [],
-    document: rootElement.ownerDocument,
     currentParent: rootElement,
     cursor: CursorSingle(startAt),
+    document: rootElement.ownerDocument,
+    register: [],
+    stack: [],
   };
   try {
     instructions.forEach((instruction) =>
@@ -225,31 +259,40 @@ function runDomBuilderInstruction(
   instruction: DomBuilderInstruction,
 ): void {
   switch (instruction.type) {
-    case "MoveCursor":
-      runMoveCursor(context, instruction.delta);
-      break;
-    case "MoveCursorEnd":
-      runMoveCursorEnd(context, instruction.delta);
-      break;
-    case "MoveCursorStart":
-      runMoveCursorStart(context, instruction.delta);
-      break;
     case "InsertElement":
       runInsertElementInstruction(context, instruction.tag);
       break;
     case "InsertText":
       runInsertTextInstruction(context, instruction.content);
       break;
-    case "SetText":
-      runSetTextInstruction(context, instruction.content);
+    case "MoveCursor":
+      runMoveCursorInstruction(context, instruction.delta);
+      break;
+    case "MoveCursorEnd":
+      runMoveCursorEndInstruction(context, instruction.delta);
+      break;
+    case "MoveCursorStart":
+      runMoveCursorStartInstruction(context, instruction.delta);
+      break;
+    case "Push":
+      runPushInstruction(context);
+      break;
+    case "Pop":
+      runPopInstruction(context);
       break;
     case "RemoveNode":
       runRemoveNodeInstruction(context);
       break;
+    case "SetText":
+      runSetTextInstruction(context, instruction.content);
+      break;
   }
 }
 
-function runMoveCursor(context: DomBuilderContext, delta: number): void {
+function runMoveCursorInstruction(
+  context: DomBuilderContext,
+  delta: number,
+): void {
   const { cursor } = context;
   const index = cursor.type === "Span" ? cursor.start : cursor.index;
   const newIndex = movePosition(context, index, delta);
@@ -260,7 +303,10 @@ function runMoveCursor(context: DomBuilderContext, delta: number): void {
   }
 }
 
-function runMoveCursorEnd(context: DomBuilderContext, delta: number): void {
+function runMoveCursorEndInstruction(
+  context: DomBuilderContext,
+  delta: number,
+): void {
   const { cursor } = context;
   const start = cursor.type === "Span" ? cursor.start : cursor.index;
   const end = cursor.type === "Span" ? cursor.end : cursor.index;
@@ -275,7 +321,10 @@ function runMoveCursorEnd(context: DomBuilderContext, delta: number): void {
   }
 }
 
-function runMoveCursorStart(context: DomBuilderContext, delta: number): void {
+function runMoveCursorStartInstruction(
+  context: DomBuilderContext,
+  delta: number,
+): void {
   const { cursor } = context;
   const start = cursor.type === "Span" ? cursor.start : cursor.index;
   const end = cursor.type === "Span" ? cursor.end : cursor.index;
@@ -327,6 +376,39 @@ function runSetTextInstruction(
     );
   }
   text.textContent = content;
+}
+
+function runPushInstruction(context: DomBuilderContext): void {
+  const { currentParent, cursor, stack } = context;
+  if (cursor.type === "Span") {
+    throw new InternalDomBuilderException(
+      "Cannot push context when cursor is in span mode",
+      context,
+    );
+  }
+  const element = currentParent.childNodes[cursor.index];
+  if (!(element instanceof HTMLElement)) {
+    throw new InternalDomBuilderException(
+      "Cannot push context when focused on a non-element node",
+      context,
+    );
+  }
+  stack.push({ ...context });
+  context.currentParent = element;
+  context.cursor = CursorSingle(0);
+}
+
+function runPopInstruction(context: DomBuilderContext): void {
+  const { stack } = context;
+  const newContext = stack.pop();
+  if (newContext === undefined) {
+    throw new InternalDomBuilderException(
+      "Cannot pop context when stack is empty",
+      context,
+    );
+  }
+  context.currentParent = newContext.currentParent;
+  context.cursor = newContext.cursor;
 }
 
 function runRemoveNodeInstruction(context: DomBuilderContext): void {
