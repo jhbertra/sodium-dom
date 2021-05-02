@@ -18,8 +18,18 @@ interface RemoveNodeInstruction {
   readonly type: "RemoveNode";
 }
 
+interface MoveCursorEndInstruction {
+  readonly type: "MoveCursorEnd";
+  readonly delta: number;
+}
+
 interface MoveCursorInstruction {
   readonly type: "MoveCursor";
+  readonly delta: number;
+}
+
+interface MoveCursorStartInstruction {
+  readonly type: "MoveCursorStart";
   readonly delta: number;
 }
 
@@ -27,7 +37,9 @@ interface MoveCursorInstruction {
  * An instruction to update the DOM builder's state.
  */
 export type DomBuilderInstruction =
+  | MoveCursorEndInstruction
   | MoveCursorInstruction
+  | MoveCursorStartInstruction
   | InsertElementInstruction
   | InsertTextInstruction
   | RemoveNodeInstruction;
@@ -41,6 +53,28 @@ export type DomBuilderInstruction =
  */
 export function MoveCursor(delta: number): DomBuilderInstruction {
   return { type: "MoveCursor", delta };
+}
+
+/**
+ * An instruction to move the end of the cursor.
+ *
+ * The cursor is clamped to the range [cursorStart, currentParent.childNodes.length].
+ * If the end would end up before the start, the start is moved to that position and
+ * the end is moved to the current start.
+ */
+export function MoveCursorEnd(delta: number): DomBuilderInstruction {
+  return { type: "MoveCursorEnd", delta };
+}
+
+/**
+ * An instruction to move the start of the cursor.
+ *
+ * The cursor is clamped to the range [cursorStart, currentParent.childNodes.length].
+ * If the end would end up before the start, the start is moved to that position and
+ * the end is moved to the current start.
+ */
+export function MoveCursorStart(delta: number): DomBuilderInstruction {
+  return { type: "MoveCursorStart", delta };
 }
 
 /**
@@ -156,6 +190,12 @@ function runDomBuilderInstruction(
     case "MoveCursor":
       runMoveCursor(context, instruction.delta);
       break;
+    case "MoveCursorEnd":
+      runMoveCursorEnd(context, instruction.delta);
+      break;
+    case "MoveCursorStart":
+      runMoveCursorStart(context, instruction.delta);
+      break;
     case "InsertElement":
       runInsertElementInstruction(context, instruction.tag);
       break;
@@ -169,16 +209,43 @@ function runDomBuilderInstruction(
 }
 
 function runMoveCursor(context: DomBuilderContext, delta: number): void {
-  const { currentParent, cursor } = context;
-  const currentIndex = cursor.type === "Span" ? cursor.start : cursor.index;
-  const newIndex = Math.max(
-    0,
-    Math.min(currentParent.childNodes.length, Math.floor(currentIndex + delta)),
-  );
+  const { cursor } = context;
+  const index = cursor.type === "Span" ? cursor.start : cursor.index;
+  const newIndex = movePosition(context, index, delta);
   if (cursor.type === "Single") {
     cursor.index = newIndex;
   } else {
     context.cursor = CursorSingle(newIndex);
+  }
+}
+
+function runMoveCursorEnd(context: DomBuilderContext, delta: number): void {
+  const { cursor } = context;
+  const start = cursor.type === "Span" ? cursor.start : cursor.index;
+  const end = cursor.type === "Span" ? cursor.end : cursor.index;
+  const movedEnd = movePosition(context, end, delta);
+  const newStart = Math.min(start, movedEnd);
+  const newEnd = Math.max(start, movedEnd);
+  if (cursor.type === "Single") {
+    context.cursor = CursorSpan(newStart, newEnd);
+  } else {
+    cursor.start = newStart;
+    cursor.end = newEnd;
+  }
+}
+
+function runMoveCursorStart(context: DomBuilderContext, delta: number): void {
+  const { cursor } = context;
+  const start = cursor.type === "Span" ? cursor.start : cursor.index;
+  const end = cursor.type === "Span" ? cursor.end : cursor.index;
+  const movedStart = movePosition(context, start, delta);
+  const newStart = Math.min(end, movedStart);
+  const newEnd = Math.max(end, movedStart);
+  if (cursor.type === "Single") {
+    context.cursor = CursorSpan(newStart, newEnd);
+  } else {
+    cursor.start = newStart;
+    cursor.end = newEnd;
   }
 }
 
@@ -206,7 +273,7 @@ function runRemoveNodeInstruction(context: DomBuilderContext): void {
   const start = cursor.type === "Single" ? cursor.index : cursor.start;
   const end = cursor.type === "Single" ? cursor.index : cursor.end;
   for (let i = start; i <= end; ++i) {
-    const nodeUnderCursor = currentParent.childNodes[i];
+    const nodeUnderCursor = currentParent.childNodes[start];
     nodeUnderCursor?.remove();
     if (nodeUnderCursor) {
       newRegister.push(nodeUnderCursor);
@@ -215,6 +282,7 @@ function runRemoveNodeInstruction(context: DomBuilderContext): void {
   if (newRegister.length > 0) {
     context.register = newRegister;
   }
+  context.cursor = CursorSingle(start);
 }
 
 function runInsert(context: DomBuilderContext, node: Node): void {
@@ -226,4 +294,16 @@ function runInsert(context: DomBuilderContext, node: Node): void {
     runRemoveNodeInstruction(context);
     runInsert(context, node);
   }
+}
+
+function movePosition(
+  context: DomBuilderContext,
+  position: number,
+  delta: number,
+): number {
+  const { currentParent } = context;
+  return Math.max(
+    0,
+    Math.min(currentParent.childNodes.length, Math.floor(position + delta)),
+  );
 }

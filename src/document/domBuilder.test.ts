@@ -5,6 +5,8 @@ import {
   InsertText,
   DomBuilderInstruction,
   MoveCursor,
+  MoveCursorEnd,
+  MoveCursorStart,
 } from "./domBuilder";
 
 test("InsertElement", () => {
@@ -146,6 +148,123 @@ test("InsertText; Move +1; InsertElement; Move -1; RemoveNode", () => {
   expect(document.body).toMatchInlineSnapshot(`
     <body>
       <div />
+    </body>
+  `);
+});
+
+test("MoveCursorEnd +3; InsertElement", () => {
+  document.body.innerHTML =
+    "<a></a><p></p><span></span><article></article><section></section>";
+  runDomBuilderTest(MoveCursorEnd(3), InsertElement("div"));
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <div />
+      <section />
+    </body>
+  `);
+});
+
+test("MoveCursorEnd +3; RemoveNode", () => {
+  document.body.innerHTML =
+    "<a></a><p></p><span></span><article></article><section></section>";
+  runDomBuilderTest(MoveCursorEnd(3), RemoveNode());
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <section />
+    </body>
+  `);
+});
+
+test("MoveCursor +1; MoveCursorEnd +2; InsertElement", () => {
+  document.body.innerHTML =
+    "<a></a><p></p><span></span><article></article><section></section>";
+  runDomBuilderTest(MoveCursor(1), MoveCursorEnd(2), InsertElement("div"));
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <a />
+      <div />
+      <section />
+    </body>
+  `);
+});
+
+test("MoveCursor +1; MoveCursorEnd +2; RemoveNode", () => {
+  document.body.innerHTML =
+    "<a></a><p></p><span></span><article></article><section></section>";
+  runDomBuilderTest(MoveCursor(1), MoveCursorEnd(2), RemoveNode());
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <a />
+      <section />
+    </body>
+  `);
+});
+
+test("MoveCursor +2; MoveCursorEnd -1; InsertElement", () => {
+  document.body.innerHTML =
+    "<a></a><p></p><span></span><article></article><section></section>";
+  runDomBuilderTest(MoveCursor(2), MoveCursorEnd(-1), InsertElement("div"));
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <a />
+      <div />
+      <article />
+      <section />
+    </body>
+  `);
+});
+
+test("MoveCursor +2; MoveCursorEnd -1; InsertElement", () => {
+  document.body.innerHTML =
+    "<a></a><p></p><span></span><article></article><section></section>";
+  runDomBuilderTest(MoveCursor(2), MoveCursorEnd(-1), RemoveNode());
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <a />
+      <article />
+      <section />
+    </body>
+  `);
+});
+
+test("MoveCursorEnd +3; MoveCursorStart +1; RemoveNode", () => {
+  document.body.innerHTML =
+    "<a></a><p></p><span></span><article></article><section></section>";
+  runDomBuilderTest(MoveCursorEnd(3), MoveCursorStart(1), RemoveNode());
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <a />
+      <section />
+    </body>
+  `);
+});
+
+test("MoveCursorEnd +3; MoveCursorStart +4; RemoveNode", () => {
+  document.body.innerHTML =
+    "<a></a><p></p><span></span><article></article><section></section>";
+  runDomBuilderTest(MoveCursorEnd(3), MoveCursorStart(4), RemoveNode());
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <a />
+      <p />
+      <span />
+    </body>
+  `);
+});
+
+test("MoveCursorEnd +3; InsertElement; InsertElement;", () => {
+  document.body.innerHTML =
+    "<a></a><p></p><span></span><article></article><section></section>";
+  runDomBuilderTest(
+    MoveCursorEnd(3),
+    InsertElement("div"),
+    InsertElement("div"),
+  );
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <div />
+      <div />
+      <section />
     </body>
   `);
 });
