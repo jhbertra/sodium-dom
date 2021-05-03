@@ -1,3 +1,4 @@
+import { Cell } from "sodiumjs";
 import { CleanupTask } from "../utils";
 import { Tag } from "./core";
 
@@ -51,6 +52,11 @@ interface PutInstruction {
   readonly type: "Put";
 }
 
+interface ReactInstruction {
+  readonly type: "React";
+  readonly cTransaction: Cell<DomTransaction>;
+}
+
 /**
  * An instruction to update the DOM builder's state.
  */
@@ -63,6 +69,7 @@ export type DomBuilderInstruction =
   | PushInstruction
   | PopInstruction
   | PutInstruction
+  | ReactInstruction
   | RemoveNodeInstruction
   | SetTextInstruction;
 
@@ -124,7 +131,7 @@ export function InsertText(content: string): DomBuilderInstruction {
 }
 
 /**
- * An instruction to push the current context onto the stack and create a new one with the current
+ * An instruction to push the current state onto the stack and create a new one with the current
  * focus as the parent.
  *
  * Throws an exception if the cursor is in span mode, or if it is not currently over an element.
@@ -134,7 +141,7 @@ export function Push(): DomBuilderInstruction {
 }
 
 /**
- * An instruction to pop a context from the stack and replace the current context with that one.
+ * An instruction to pop a state from the stack and replace the current state with that one.
  *
  * Throws an exception if the stack is empty.
  */
@@ -159,6 +166,15 @@ export function SetText(content: string): DomBuilderInstruction {
 }
 
 /**
+ * An instruction to react to a cell of transactions by running them.
+ */
+export function React(
+  cTransaction: Cell<DomTransaction>,
+): DomBuilderInstruction {
+  return { type: "React", cTransaction };
+}
+
+/**
  * An instruction to remove a node from the DOM.
  *
  * If there is no node under the cursor in the current element's child list, nothing will be changed.
@@ -172,6 +188,11 @@ export function RemoveNode(): DomBuilderInstruction {
 /*
  * State types
  */
+
+export interface DomTransaction {
+  readonly offset: number;
+  readonly instructions: DomBuilderInstruction[];
+}
 
 interface CursorSingle {
   readonly type: "Single";
@@ -206,6 +227,7 @@ interface DomTransactionState {
    * The element whose child nodes are being traversed.
    */
   currentParent: HTMLElement;
+  dead: boolean;
   /**
    * The document.
    */
@@ -225,125 +247,124 @@ interface DomTransactionState {
   readonly rollbackStack: CleanupTask[];
 }
 
-class InternalDomBuilderException extends Error {
-  constructor(message: string, public readonly context: DomTransactionState) {
-    super(message);
-  }
-}
-
-export class DomBuilderException extends InternalDomBuilderException {
-  constructor(
-    message: string,
-    public readonly context: DomTransactionState,
-    public readonly instructions: DomBuilderInstruction[],
-  ) {
-    super(message, context);
-  }
-}
-
 /*
  * Transaction handlers
  */
 
 export function commitDomTransaction(
   rootElement: HTMLElement,
-  startAt: number,
-  instructions: DomBuilderInstruction[],
+  transaction: DomTransaction,
 ): CleanupTask {
-  const context: DomTransactionState = {
+  const state: DomTransactionState = {
     currentParent: rootElement,
-    cursor: CursorSingle(startAt),
+    cursor: CursorSingle(transaction.offset),
+    dead: false,
     document: rootElement.ownerDocument,
     register: [],
     stack: [],
     rollbackStack: [],
   };
+  try {
+    const rollback = commitDomTransactionInternal(
+      state,
+      transaction.instructions,
+    );
+    return rollback;
+  } finally {
+    state.dead = true;
+  }
+}
+
+function commitDomTransactionInternal(
+  state: DomTransactionState,
+  instructions: DomBuilderInstruction[],
+): CleanupTask {
   const rollbackTransaction = () => {
-    while (context.rollbackStack.length > 0) {
-      context.rollbackStack.pop()?.();
+    while (state.rollbackStack.length > 0) {
+      state.rollbackStack.pop()?.();
     }
   };
   try {
     instructions.forEach((instruction) =>
-      runDomBuilderInstruction(context, instruction),
+      runDomBuilderInstruction(state, instruction),
     );
     return rollbackTransaction;
   } catch (e) {
     rollbackTransaction();
-    if (e instanceof InternalDomBuilderException) {
-      throw new DomBuilderException(e.message, context, instructions);
-    }
     throw e;
   }
 }
 
 /**
- * Run an instruction and update the context.
+ * Run an instruction and update the state.
  */
 function runDomBuilderInstruction(
-  context: DomTransactionState,
+  state: DomTransactionState,
   instruction: DomBuilderInstruction,
 ): void {
   switch (instruction.type) {
     case "InsertElement":
-      runInsertElementInstruction(context, instruction.tag);
+      runInsertElementInstruction(state, instruction.tag);
       break;
     case "InsertText":
-      runInsertTextInstruction(context, instruction.content);
+      runInsertTextInstruction(state, instruction.content);
       break;
     case "MoveCursor":
-      runMoveCursorInstruction(context, instruction.delta);
+      runMoveCursorInstruction(state, instruction.delta);
       break;
     case "MoveCursorEnd":
-      runMoveCursorEndInstruction(context, instruction.delta);
+      runMoveCursorEndInstruction(state, instruction.delta);
       break;
     case "MoveCursorStart":
-      runMoveCursorStartInstruction(context, instruction.delta);
+      runMoveCursorStartInstruction(state, instruction.delta);
       break;
     case "Push":
-      runPushInstruction(context);
+      runPushInstruction(state);
       break;
     case "Pop":
-      runPopInstruction(context);
+      runPopInstruction(state);
       break;
     case "Put":
-      runPutInstruction(context);
+      runPutInstruction(state);
+      break;
+    case "React":
+      runReactInstruction(state, instruction.cTransaction);
       break;
     case "RemoveNode":
-      runRemoveNodeInstruction(context);
+      runRemoveNodeInstruction(state);
       break;
     case "SetText":
-      runSetTextInstruction(context, instruction.content);
+      runSetTextInstruction(state, instruction.content);
       break;
   }
 }
 
 function runMoveCursorInstruction(
-  context: DomTransactionState,
+  state: DomTransactionState,
   delta: number,
 ): void {
-  const { cursor } = context;
+  const { cursor } = state;
   const index = cursor.type === "Span" ? cursor.start : cursor.index;
-  const newIndex = movePosition(context, index, delta);
+  const newIndex = movePosition(state, index, delta);
   if (cursor.type === "Single") {
     cursor.index = newIndex;
   } else {
-    context.cursor = CursorSingle(newIndex);
+    state.cursor = CursorSingle(newIndex);
   }
 }
 
 function runMoveCursorEndInstruction(
-  context: DomTransactionState,
+  state: DomTransactionState,
   delta: number,
 ): void {
-  const { cursor } = context;
+  const { cursor } = state;
   const start = cursor.type === "Span" ? cursor.start : cursor.index;
   const end = cursor.type === "Span" ? cursor.end : cursor.index;
-  const movedEnd = movePosition(context, end, delta);
+  const movedEnd = movePosition(state, end, delta);
   const newStart = Math.min(start, movedEnd);
   const newEnd = Math.max(start, movedEnd);
   if (cursor.type === "Single") {
-    context.cursor = CursorSpan(newStart, newEnd);
+    state.cursor = CursorSpan(newStart, newEnd);
   } else {
     cursor.start = newStart;
     cursor.end = newEnd;
@@ -351,17 +372,17 @@ function runMoveCursorEndInstruction(
 }
 
 function runMoveCursorStartInstruction(
-  context: DomTransactionState,
+  state: DomTransactionState,
   delta: number,
 ): void {
-  const { cursor } = context;
+  const { cursor } = state;
   const start = cursor.type === "Span" ? cursor.start : cursor.index;
   const end = cursor.type === "Span" ? cursor.end : cursor.index;
-  const movedStart = movePosition(context, start, delta);
+  const movedStart = movePosition(state, start, delta);
   const newStart = Math.min(end, movedStart);
   const newEnd = Math.max(end, movedStart);
   if (cursor.type === "Single") {
-    context.cursor = CursorSpan(newStart, newEnd);
+    state.cursor = CursorSpan(newStart, newEnd);
   } else {
     cursor.start = newStart;
     cursor.end = newEnd;
@@ -369,85 +390,101 @@ function runMoveCursorStartInstruction(
 }
 
 function runInsertElementInstruction(
-  context: DomTransactionState,
+  state: DomTransactionState,
   tag: Tag,
 ): void {
-  const { document } = context;
+  const { document } = state;
   const element = document.createElement(tag);
-  runInsert(context, [element]);
+  runInsert(state, [element]);
 }
 
 function runInsertTextInstruction(
-  context: DomTransactionState,
+  state: DomTransactionState,
   content: string,
 ): void {
-  const { document } = context;
+  const { document } = state;
   const text = document.createTextNode(content);
-  runInsert(context, [text]);
+  runInsert(state, [text]);
 }
 
 function runSetTextInstruction(
-  context: DomTransactionState,
+  state: DomTransactionState,
   content: string,
 ): void {
-  const { currentParent, cursor } = context;
+  const { currentParent, cursor } = state;
   if (cursor.type === "Span") {
-    throw new InternalDomBuilderException(
-      "Cannot set text when cursor is in span mode",
-      context,
-    );
+    throw new Error("Cannot set text when cursor is in span mode");
   }
   const text = currentParent.childNodes[cursor.index];
   if (!(text instanceof Text)) {
-    throw new InternalDomBuilderException(
-      "Cannot set text on a non-text node",
-      context,
-    );
+    throw new Error("Cannot set text on a non-text node");
   }
   text.textContent = content;
 }
 
-function runPushInstruction(context: DomTransactionState): void {
-  const { currentParent, cursor, stack } = context;
+function runPushInstruction(state: DomTransactionState): void {
+  const { currentParent, cursor, stack } = state;
   if (cursor.type === "Span") {
-    throw new InternalDomBuilderException(
-      "Cannot push context when cursor is in span mode",
-      context,
-    );
+    throw new Error("Cannot push state when cursor is in span mode");
   }
   const element = currentParent.childNodes[cursor.index];
   if (!(element instanceof HTMLElement)) {
-    throw new InternalDomBuilderException(
-      "Cannot push context when focused on a non-element node",
-      context,
-    );
+    throw new Error("Cannot push state when focused on a non-element node");
   }
-  stack.push({ ...context });
-  context.currentParent = element;
-  context.cursor = CursorSingle(0);
+  stack.push({ ...state });
+  state.currentParent = element;
+  state.cursor = CursorSingle(0);
 }
 
-function runPopInstruction(context: DomTransactionState): void {
-  const { stack } = context;
+function runPopInstruction(state: DomTransactionState): void {
+  const { stack } = state;
   const newContext = stack.pop();
   if (newContext === undefined) {
-    throw new InternalDomBuilderException(
-      "Cannot pop context when stack is empty",
-      context,
-    );
+    throw new Error("Cannot pop state when stack is empty");
   }
-  context.currentParent = newContext.currentParent;
-  context.cursor = newContext.cursor;
+  state.currentParent = newContext.currentParent;
+  state.cursor = newContext.cursor;
 }
 
-function runPutInstruction(context: DomTransactionState): void {
-  const { register } = context;
-  context.register = [];
-  runInsert(context, register);
+function runPutInstruction(state: DomTransactionState): void {
+  const { register } = state;
+  state.register = [];
+  runInsert(state, register);
 }
 
-function runRemoveNodeInstruction(context: DomTransactionState): void {
-  const { currentParent, cursor, rollbackStack } = context;
+function runReactInstruction(
+  state: DomTransactionState,
+  cTransaction: Cell<DomTransaction>,
+): void {
+  const { currentParent, document, rollbackStack } = state;
+  const rollbacks: CleanupTask[] = [];
+  rollbackStack.push(
+    cTransaction.listen((transaction) => {
+      const subState: DomTransactionState = state.dead
+        ? {
+            dead: false,
+            currentParent,
+            rollbackStack: [],
+            register: [],
+            cursor: CursorSingle(transaction.offset),
+            stack: [],
+            document,
+          }
+        : state;
+      rollbacks.push(
+        commitDomTransactionInternal(subState, transaction.instructions),
+      );
+    }),
+  );
+  rollbackStack.push(() => {
+    while (rollbacks.length > 0) {
+      rollbacks.pop()?.();
+    }
+  });
+}
+
+function runRemoveNodeInstruction(state: DomTransactionState): void {
+  const { currentParent, cursor, rollbackStack } = state;
   const newRegister = [];
   const start = cursor.type === "Single" ? cursor.index : cursor.start;
   const end = cursor.type === "Single" ? cursor.index : cursor.end;
@@ -465,13 +502,13 @@ function runRemoveNodeInstruction(context: DomTransactionState): void {
     }
   }
   if (newRegister.length > 0) {
-    context.register = newRegister;
+    state.register = newRegister;
   }
-  context.cursor = CursorSingle(start);
+  state.cursor = CursorSingle(start);
 }
 
-function runInsert(context: DomTransactionState, nodes: Node[]): void {
-  const { currentParent, cursor, rollbackStack } = context;
+function runInsert(state: DomTransactionState, nodes: Node[]): void {
+  const { currentParent, cursor, rollbackStack } = state;
   if (cursor.type === "Single") {
     const nodeUnderCursor = currentParent.childNodes[cursor.index] ?? null;
     nodes.forEach((node) => currentParent.insertBefore(node, nodeUnderCursor));
@@ -479,17 +516,17 @@ function runInsert(context: DomTransactionState, nodes: Node[]): void {
       nodes.forEach((node) => currentParent.removeChild(node)),
     );
   } else {
-    runRemoveNodeInstruction(context);
-    runInsert(context, nodes);
+    runRemoveNodeInstruction(state);
+    runInsert(state, nodes);
   }
 }
 
 function movePosition(
-  context: DomTransactionState,
+  state: DomTransactionState,
   position: number,
   delta: number,
 ): number {
-  const { currentParent } = context;
+  const { currentParent } = state;
   return Math.max(
     0,
     Math.min(currentParent.childNodes.length, Math.floor(position + delta)),

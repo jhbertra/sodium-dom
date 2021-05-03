@@ -1,3 +1,5 @@
+import { CellSink, Operational } from "sodiumjs";
+import { Tag } from "./core";
 import {
   commitDomTransaction,
   InsertElement,
@@ -11,6 +13,7 @@ import {
   Push,
   Pop,
   Put,
+  React,
 } from "./domBuilder";
 
 test("InsertElement", () => {
@@ -390,7 +393,7 @@ test("InsertElement; Push; InsertElement; Pop; MoveCursor +1; Push", () => {
       Push(),
     ),
   ).toThrowErrorMatchingInlineSnapshot(
-    `"Cannot push context when focused on a non-element node"`,
+    `"Cannot push state when focused on a non-element node"`,
   );
 });
 
@@ -406,7 +409,7 @@ test("InsertElement; Push; InsertElement; Pop; MoveCursorEnd +1; Push", () => {
       Push(),
     ),
   ).toThrowErrorMatchingInlineSnapshot(
-    `"Cannot push context when cursor is in span mode"`,
+    `"Cannot push state when cursor is in span mode"`,
   );
 });
 
@@ -541,12 +544,170 @@ test("Cut span, Put span", () => {
   `);
 });
 
+test("Dynamic text", () => {
+  document.body.innerHTML = "";
+  const cText = new CellSink<string>("Hello, world!");
+  const rollback = commitDomTransaction(document.body, {
+    offset: 0,
+    instructions: [
+      InsertElement("p"),
+      Push(),
+      InsertText(""),
+      React(cText.map((s) => ({ offset: 0, instructions: [SetText(s)] }))),
+    ],
+  });
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <p>
+        Hello, world!
+      </p>
+    </body>
+  `);
+  cText.send("Hello, universe!");
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <p>
+        Hello, universe!
+      </p>
+    </body>
+  `);
+  rollback();
+  expect(document.body).toMatchInlineSnapshot(`<body />`);
+});
+
+test("Dynamic text, middle node", () => {
+  document.body.innerHTML = "";
+  const cText = new CellSink<string>("Hello, reactive world!");
+  const rollback = commitDomTransaction(document.body, {
+    offset: 0,
+    instructions: [
+      InsertElement("p"),
+      MoveCursor(1),
+      InsertElement("p"),
+      Push(),
+      InsertText("Hello, world!"),
+      MoveCursor(1),
+      InsertText(""),
+      React(cText.map((s) => ({ offset: 1, instructions: [SetText(s)] }))),
+      MoveCursor(1),
+      InsertText("Hello, universe!"),
+    ],
+  });
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <p />
+      <p>
+        Hello, world!
+        Hello, reactive world!
+        Hello, universe!
+      </p>
+    </body>
+  `);
+  cText.send("HELLO, REACTIVE WORLD!");
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <p />
+      <p>
+        Hello, world!
+        HELLO, REACTIVE WORLD!
+        Hello, universe!
+      </p>
+    </body>
+  `);
+  rollback();
+  expect(document.body).toMatchInlineSnapshot(`<body />`);
+});
+
+test("Dynamic element", () => {
+  document.body.innerHTML = "";
+  const cTag = new CellSink<Tag>("p");
+  const rollback = commitDomTransaction(document.body, {
+    offset: 0,
+    instructions: [
+      React(
+        cTag.map((tag) => ({
+          offset: 0,
+          instructions: [RemoveNode(), InsertElement(tag)],
+        })),
+      ),
+    ],
+  });
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <p />
+    </body>
+  `);
+  cTag.send("div");
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <div />
+    </body>
+  `);
+  rollback();
+  expect(document.body).toMatchInlineSnapshot(`<body />`);
+});
+
+test("Dynamic fragment", () => {
+  document.body.innerHTML = "";
+  const cTags = new CellSink<Tag[]>(["p", "a"]);
+  const rollback = commitDomTransaction(document.body, {
+    offset: 0,
+    instructions: [
+      InsertElement("h1"),
+      MoveCursor(1),
+      InsertElement("h2"),
+      MoveCursor(1),
+      React(
+        Operational.updates(cTags)
+          .snapshot(cTags, (tags, prevTags) => [tags, prevTags] as const)
+          .holdLazy(cTags.sampleLazy().map((tags) => [tags, []]))
+          .map(([tags, prevTags]) => ({
+            offset: 2,
+            instructions: [
+              ...(prevTags.length ? [MoveCursorEnd(prevTags.length - 1)] : []),
+              ...tags.flatMap((tag) => [InsertElement(tag), MoveCursor(1)]),
+            ],
+          })),
+      ),
+      MoveCursor(1),
+      InsertElement("h3"),
+      MoveCursor(1),
+      InsertElement("h4"),
+    ],
+  });
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <h1 />
+      <h2 />
+      <p />
+      <a />
+      <h3 />
+      <h4 />
+    </body>
+  `);
+  cTags.send(["span"]);
+  expect(document.body).toMatchInlineSnapshot(`
+    <body>
+      <h1 />
+      <h2 />
+      <span />
+      <h3 />
+      <h4 />
+    </body>
+  `);
+  rollback();
+  expect(document.body).toMatchInlineSnapshot(`<body />`);
+});
+
 function testDomTransaction(
   ...instructions: DomBuilderInstruction[]
 ): HTMLElement {
   const initialBody = document.body.cloneNode(true) as HTMLElement;
   try {
-    const rollback = commitDomTransaction(document.body, 0, instructions);
+    const rollback = commitDomTransaction(document.body, {
+      offset: 0,
+      instructions,
+    });
     const finalBody = document.body.cloneNode(true) as HTMLElement;
     rollback();
     return finalBody;
