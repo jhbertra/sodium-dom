@@ -14,6 +14,10 @@ import {
   Pop,
   Put,
   React,
+  SetAttribute,
+  SetAttributeNS,
+  RemoveAttribute,
+  RemoveAttributeNS,
 } from "./domBuilder";
 
 test("InsertElement", () => {
@@ -162,6 +166,98 @@ test("InsertText; Move +1; InsertElement; Move -1; RemoveNode", () => {
   expect(finalBody).toMatchInlineSnapshot(`
     <body>
       <div />
+    </body>
+  `);
+});
+
+test("SetAttribute", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    SetAttribute("id", "app"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main
+        id="app"
+      />
+    </body>
+  `);
+});
+
+test("RemoveAttribute", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    RemoveAttribute("id"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main />
+    </body>
+  `);
+});
+
+test("SetAttribute; RemoveAttribute", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    SetAttribute("id", "app"),
+    RemoveAttribute("id"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main />
+    </body>
+  `);
+});
+
+test("SetAttributeNS", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    SetAttributeNS(
+      "http://www.mozilla.org/ns/specialspace",
+      "spec:align",
+      "center",
+    ),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main
+        spec:align="center"
+      />
+    </body>
+  `);
+});
+
+test("RemoveAttributeNS", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    RemoveAttributeNS("http://www.mozilla.org/ns/specialspace", "spec:align"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main />
+    </body>
+  `);
+});
+
+test("SetAttributeNS; RemoveAttributeNS", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    SetAttributeNS(
+      "http://www.mozilla.org/ns/specialspace",
+      "spec:align",
+      "center",
+    ),
+    RemoveAttributeNS("http://www.mozilla.org/ns/specialspace", "align"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main />
     </body>
   `);
 });
