@@ -22,6 +22,11 @@ interface SetAttributeInstruction {
   readonly value: string;
 }
 
+interface RemoveAttributeInstruction {
+  readonly type: "RemoveAttribute";
+  readonly attribute: string;
+}
+
 interface SetAttributeNSInstruction {
   readonly type: "SetAttributeNS";
   readonly attribute: string;
@@ -29,15 +34,21 @@ interface SetAttributeNSInstruction {
   readonly value: string;
 }
 
-interface RemoveAttributeInstruction {
-  readonly type: "RemoveAttribute";
-  readonly attribute: string;
-}
-
 interface RemoveAttributeNSInstruction {
   readonly type: "RemoveAttributeNS";
   readonly attribute: string;
   readonly namespace: string;
+}
+
+interface SetPropInstruction {
+  readonly type: "SetProp";
+  readonly prop: string;
+  readonly value: unknown;
+}
+
+interface RemovePropInstruction {
+  readonly type: "RemoveProp";
+  readonly prop: string;
 }
 
 interface SetTextInstruction {
@@ -95,10 +106,12 @@ export type DomBuilderInstruction =
   | PutInstruction
   | ReactInstruction
   | RemoveNodeInstruction
-  | RemoveAttributeNSInstruction
   | RemoveAttributeInstruction
-  | SetAttributeNSInstruction
   | SetAttributeInstruction
+  | RemoveAttributeNSInstruction
+  | SetAttributeNSInstruction
+  | RemovePropInstruction
+  | SetPropInstruction
   | SetTextInstruction;
 
 /**
@@ -197,19 +210,6 @@ export function SetAttribute(
 }
 
 /**
- * An instruction to set an attribute with a namespace on an element.
- *
- * Throws an exception if the cursor is in span mode, or if it is not currently over an element.
- */
-export function SetAttributeNS(
-  namespace: string,
-  attribute: string,
-  value: string,
-): DomBuilderInstruction {
-  return { type: "SetAttributeNS", attribute, namespace, value };
-}
-
-/**
  * An instruction to remove an attribute from an element.
  *
  * Throws an exception if the cursor is in span mode, or if it is not currently over an element.
@@ -228,6 +228,37 @@ export function RemoveAttributeNS(
   attribute: string,
 ): DomBuilderInstruction {
   return { type: "RemoveAttributeNS", attribute, namespace };
+}
+
+/**
+ * An instruction to set an attribute with a namespace on an element.
+ *
+ * Throws an exception if the cursor is in span mode, or if it is not currently over an element.
+ */
+export function SetAttributeNS(
+  namespace: string,
+  attribute: string,
+  value: string,
+): DomBuilderInstruction {
+  return { type: "SetAttributeNS", attribute, namespace, value };
+}
+
+/**
+ * An instruction to set a prop on an element.
+ *
+ * Throws an exception if the cursor is in span mode, or if it is not currently over an element.
+ */
+export function SetProp(prop: string, value: string): DomBuilderInstruction {
+  return { type: "SetProp", prop, value };
+}
+
+/**
+ * An instruction to remove a prop from an element.
+ *
+ * Throws an exception if the cursor is in span mode, or if it is not currently over an element.
+ */
+export function RemoveProp(prop: string): DomBuilderInstruction {
+  return { type: "RemoveProp", prop };
 }
 
 /**
@@ -410,18 +441,18 @@ function runDomBuilderInstruction(
     case "RemoveAttribute":
       runRemoveAttributeInstruction(state, instruction.attribute);
       break;
-    case "RemoveAttributeNS":
-      runRemoveAttributeNSInstruction(
-        state,
-        instruction.namespace,
-        instruction.attribute,
-      );
-      break;
     case "SetAttribute":
       runSetAttributeInstruction(
         state,
         instruction.attribute,
         instruction.value,
+      );
+      break;
+    case "RemoveAttributeNS":
+      runRemoveAttributeNSInstruction(
+        state,
+        instruction.namespace,
+        instruction.attribute,
       );
       break;
     case "SetAttributeNS":
@@ -431,6 +462,12 @@ function runDomBuilderInstruction(
         instruction.attribute,
         instruction.value,
       );
+      break;
+    case "RemoveProp":
+      runRemovePropInstruction(state, instruction.prop);
+      break;
+    case "SetProp":
+      runSetPropInstruction(state, instruction.prop, instruction.value);
       break;
     case "SetText":
       runSetTextInstruction(state, instruction.content);
@@ -521,22 +558,6 @@ function runRemoveAttributeInstruction(
   el.removeAttribute(attribute);
 }
 
-function runRemoveAttributeNSInstruction(
-  state: DomTransactionState,
-  namespace: string,
-  attribute: string,
-): void {
-  const { currentParent, cursor } = state;
-  if (cursor.type === "Span") {
-    throw new Error("Cannot set text when cursor is in span mode");
-  }
-  const el = currentParent.childNodes[cursor.index];
-  if (!(el instanceof Element)) {
-    throw new Error("Cannot set text on a non-element node");
-  }
-  el.removeAttributeNS(namespace, attribute);
-}
-
 function runSetAttributeInstruction(
   state: DomTransactionState,
   attribute: string,
@@ -551,6 +572,22 @@ function runSetAttributeInstruction(
     throw new Error("Cannot set text on a non-element node");
   }
   el.setAttribute(attribute, value);
+}
+
+function runRemoveAttributeNSInstruction(
+  state: DomTransactionState,
+  namespace: string,
+  attribute: string,
+): void {
+  const { currentParent, cursor } = state;
+  if (cursor.type === "Span") {
+    throw new Error("Cannot set text when cursor is in span mode");
+  }
+  const el = currentParent.childNodes[cursor.index];
+  if (!(el instanceof Element)) {
+    throw new Error("Cannot set text on a non-element node");
+  }
+  el.removeAttributeNS(namespace, attribute);
 }
 
 function runSetAttributeNSInstruction(
@@ -568,6 +605,40 @@ function runSetAttributeNSInstruction(
     throw new Error("Cannot set text on a non-element node");
   }
   el.setAttributeNS(namespace, attribute, value);
+}
+
+function runRemovePropInstruction(
+  state: DomTransactionState,
+  prop: string,
+): void {
+  const { currentParent, cursor } = state;
+  if (cursor.type === "Span") {
+    throw new Error("Cannot set text when cursor is in span mode");
+  }
+  const el = currentParent.childNodes[cursor.index];
+  if (!(el instanceof Element)) {
+    throw new Error("Cannot set text on a non-element node");
+  }
+  el.removeAttribute(prop);
+}
+
+function runSetPropInstruction(
+  state: DomTransactionState,
+  prop: string,
+  value: unknown,
+): void {
+  const { currentParent, cursor } = state;
+  if (cursor.type === "Span") {
+    throw new Error("Cannot set text when cursor is in span mode");
+  }
+  const el = currentParent.childNodes[cursor.index];
+  if (!(el instanceof Element)) {
+    throw new Error("Cannot set text on a non-element node");
+  }
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+  el[prop as any] = value;
 }
 
 function runSetTextInstruction(

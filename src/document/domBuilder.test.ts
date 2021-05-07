@@ -18,6 +18,8 @@ import {
   SetAttributeNS,
   RemoveAttribute,
   RemoveAttributeNS,
+  SetProp,
+  RemoveProp,
 } from "./domBuilder";
 
 test("InsertElement", () => {
@@ -262,6 +264,44 @@ test("SetAttributeNS; RemoveAttributeNS", () => {
   `);
 });
 
+test("SetProp", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    SetProp("id", "app"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main
+        id="app"
+      />
+    </body>
+  `);
+});
+
+test("RemoveProp", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(InsertElement("main"), RemoveProp("id"));
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main />
+    </body>
+  `);
+});
+
+test("SetProp; RemoveProp", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    SetProp("id", "app"),
+    RemoveProp("id"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main />
+    </body>
+  `);
+});
 test("MoveCursorEnd +3; InsertElement", () => {
   document.body.innerHTML =
     "<a></a><p></p><span></span><article></article><section></section>";
