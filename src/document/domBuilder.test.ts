@@ -20,6 +20,8 @@ import {
   RemoveAttributeNS,
   SetProp,
   RemoveProp,
+  AddToken,
+  RemoveToken,
 } from "./domBuilder";
 
 test("InsertElement", () => {
@@ -302,6 +304,133 @@ test("SetProp; RemoveProp", () => {
     </body>
   `);
 });
+
+test("AddToken", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    AddToken("classList", "foo"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main
+        class="foo"
+      />
+    </body>
+  `);
+});
+
+test("RemoveToken", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    RemoveToken("classList", "foo"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main />
+    </body>
+  `);
+});
+
+test("AddToken; RemoveToken (same)", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    AddToken("classList", "foo"),
+    RemoveToken("classList", "foo"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main
+        class=""
+      />
+    </body>
+  `);
+});
+
+test("AddToken; RemoveToken (different)", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    AddToken("classList", "foo"),
+    RemoveToken("classList", "bar"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main
+        class="foo"
+      />
+    </body>
+  `);
+});
+
+test("AddToken; AddToken (same)", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    AddToken("classList", "foo"),
+    AddToken("classList", "foo"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main
+        class="foo"
+      />
+    </body>
+  `);
+});
+
+test("AddToken; AddToken (different)", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    AddToken("classList", "foo"),
+    AddToken("classList", "bar"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main
+        class="foo bar"
+      />
+    </body>
+  `);
+});
+
+test("AddToken; AddToken; RemoveToken (first)", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    AddToken("classList", "foo"),
+    AddToken("classList", "bar"),
+    RemoveToken("classList", "foo"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main
+        class="bar"
+      />
+    </body>
+  `);
+});
+
+test("AddToken; AddToken; RemoveToken (second)", () => {
+  document.body.innerHTML = "";
+  const finalBody = testDomTransaction(
+    InsertElement("main"),
+    AddToken("classList", "foo"),
+    AddToken("classList", "bar"),
+    RemoveToken("classList", "bar"),
+  );
+  expect(finalBody).toMatchInlineSnapshot(`
+    <body>
+      <main
+        class="foo"
+      />
+    </body>
+  `);
+});
+
 test("MoveCursorEnd +3; InsertElement", () => {
   document.body.innerHTML =
     "<a></a><p></p><span></span><article></article><section></section>";

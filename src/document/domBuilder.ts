@@ -6,6 +6,18 @@ import { Tag } from "./core";
  * Instruction types
  */
 
+interface AddTokenInstruction {
+  readonly type: "AddToken";
+  readonly tokenList: string;
+  readonly token: string;
+}
+
+interface RemoveTokenInstruction {
+  readonly type: "RemoveToken";
+  readonly tokenList: string;
+  readonly token: string;
+}
+
 interface InsertElementInstruction {
   readonly type: "InsertElement";
   readonly tag: Tag;
@@ -96,6 +108,8 @@ interface ReactInstruction {
  * An instruction to update the DOM builder's state.
  */
 export type DomBuilderInstruction =
+  | AddTokenInstruction
+  | RemoveTokenInstruction
   | MoveCursorEndInstruction
   | MoveCursorInstruction
   | MoveCursorStartInstruction
@@ -112,7 +126,35 @@ export type DomBuilderInstruction =
   | SetAttributeNSInstruction
   | RemovePropInstruction
   | SetPropInstruction
-  | SetTextInstruction;
+  | SetTextInstruction
+  | AddTokenInstruction
+  | RemoveTokenInstruction;
+
+/**
+ * An instruction to add a token to a token list on the element.
+ *
+ * Throws an exception if the cursor is in span mode, or if it is not currently
+ * over an element, or if tokenList is not a valid DOMTokenList.
+ */
+export function AddToken(
+  tokenList: string,
+  token: string,
+): DomBuilderInstruction {
+  return { type: "AddToken", tokenList, token };
+}
+
+/**
+ * An instruction to remove a token from a token list on the element.
+ *
+ * Throws an exception if the cursor is in span mode, or if it is not currently
+ * over an element, or if tokenList is not a valid DOMTokenList.
+ */
+export function RemoveToken(
+  tokenList: string,
+  token: string,
+): DomBuilderInstruction {
+  return { type: "RemoveToken", tokenList, token };
+}
 
 /**
  * An instruction to move the cursor.
@@ -469,6 +511,16 @@ function runDomBuilderInstruction(
     case "SetProp":
       runSetPropInstruction(state, instruction.prop, instruction.value);
       break;
+    case "AddToken":
+      runAddTokenInstruction(state, instruction.tokenList, instruction.token);
+      break;
+    case "RemoveToken":
+      runRemoveTokenInstruction(
+        state,
+        instruction.tokenList,
+        instruction.token,
+      );
+      break;
     case "SetText":
       runSetTextInstruction(state, instruction.content);
       break;
@@ -638,7 +690,51 @@ function runSetPropInstruction(
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-  el[prop as any] = value;
+  el[prop as keyof Element] = value;
+}
+
+function runAddTokenInstruction(
+  state: DomTransactionState,
+  tokenList: string,
+  token: string,
+): void {
+  const { currentParent, cursor } = state;
+  if (cursor.type === "Span") {
+    throw new Error("Cannot set text when cursor is in span mode");
+  }
+  const el = currentParent.childNodes[cursor.index];
+  if (!(el instanceof Element)) {
+    throw new Error("Cannot set text on a non-element node");
+  }
+  const list = el[tokenList as keyof Element] as unknown;
+  if (!(list instanceof DOMTokenList)) {
+    throw new Error(
+      `${tokenList} is not a valid DOMTokenList on element type ${el.tagName}`,
+    );
+  }
+  list.add(token);
+}
+
+function runRemoveTokenInstruction(
+  state: DomTransactionState,
+  tokenList: string,
+  token: string,
+): void {
+  const { currentParent, cursor } = state;
+  if (cursor.type === "Span") {
+    throw new Error("Cannot set text when cursor is in span mode");
+  }
+  const el = currentParent.childNodes[cursor.index];
+  if (!(el instanceof Element)) {
+    throw new Error("Cannot set text on a non-element node");
+  }
+  const list = el[tokenList as keyof Element] as unknown;
+  if (!(list instanceof DOMTokenList)) {
+    throw new Error(
+      `${tokenList} is not a valid DOMTokenList on element type ${el.tagName}`,
+    );
+  }
+  list.remove(token);
 }
 
 function runSetTextInstruction(
