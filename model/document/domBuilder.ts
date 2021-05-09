@@ -157,44 +157,45 @@ export const removeChild: DomBuilder = (draft) =>
 export const putNode: DomBuilder = (draft) => draft;
 
 // Element operations
+export const setAttribute = (name: string, value: string): DomBuilder => ({
+  attributes,
+  ...draft
+}) => ({
+  ...draft,
+  attributes: { ...attributes, [name]: value },
+});
 
-// export function setAttribute(name: string, value: string): DomBuilder {
-//   return (draft) => draft;
-// }
+export const removeAttribute = (name: string): DomBuilder => ({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  attributes: { [name]: _, ...attributes },
+  ...draft
+}) => ({
+  ...draft,
+  attributes,
+});
 
-// export function setAttributeNS(
-//   namespace: string,
-//   name: string,
-//   value: string,
-// ): DomBuilder {
-//   return (draft) => draft;
-// }
+export const setProp = (name: string, value: string): DomBuilder => ({
+  props,
+  ...draft
+}) => ({
+  ...draft,
+  props: { ...props, [name]: value },
+});
 
-// export function setProp(name: string, value: string): DomBuilder {
-//   return (draft) => draft;
-// }
-
-// export function addToken(name: string, value: string): DomBuilder {
-//   return (draft) => draft;
-// }
-
-// export function removeAttribute(name: string, value: string): DomBuilder {
-//   return (draft) => draft;
-// }
-
-// export function removeAttributeNS(
-//   namespace: string,
-//   name: string,
-//   value: string,
-// ): DomBuilder {
-//   return (draft) => draft;
-// }
-
-// export function removeProp(name: string, value: string): DomBuilder {
-//   return (draft) => draft;
-// }
+export const removeProp = (name: string): DomBuilder => ({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  props: { [name]: _, ...props },
+  ...draft
+}) => ({
+  ...draft,
+  props,
+});
 
 // export function addToken(name: string, value: string): DomBuilder {
+//   return (draft) => draft;
+// }
+
+// export function removeToken(name: string, value: string): DomBuilder {
 //   return (draft) => draft;
 // }
 

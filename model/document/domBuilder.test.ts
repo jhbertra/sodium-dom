@@ -12,8 +12,12 @@ import {
   insertText,
   next,
   prev,
+  removeAttribute,
   removeChild,
+  removeProp,
   run,
+  setAttribute,
+  setProp,
   start,
   updateElement,
   updateText,
@@ -141,19 +145,59 @@ const arbTag = fc.constantFrom<Tag[]>(
   "title",
 );
 
-const arbInsertChild = (size = 4): fc.Arbitrary<[DomBuilder, string]> =>
+const arbInsertElement = (size = 4): fc.Arbitrary<[DomBuilder, string]> =>
   arbTag.chain((tag) =>
     arbDomBuilder_(Math.max(0, size - 1)).map(([builder, s]) => [
       insertElement(tag, builder),
-      `insertChild(${tag},${s})`,
+      `insertElement(${tag},${s})`,
     ]),
   );
+
+const arbUpdateElement = (size = 4): fc.Arbitrary<[DomBuilder, string]> =>
+  fc
+    .constant(undefined)
+    .chain(() =>
+      arbDomBuilder_(Math.max(0, size - 1)).map(([builder, s]) => [
+        updateElement(builder),
+        `updateElement(${s})`,
+      ]),
+    );
+
+const arbInsertText: fc.Arbitrary<
+  [DomBuilder, string]
+> = fc.lorem().map((t) => [insertText(t), `insertText(${t})`]);
+const arbUpdateText: fc.Arbitrary<
+  [DomBuilder, string]
+> = fc.lorem().map((t) => [updateText(t), `updateText(${t})`]);
+
+const arbSetAttribute: fc.Arbitrary<[DomBuilder, string]> = fc
+  .tuple(fc.string({ maxLength: 2 }), fc.string())
+  .map((args) => [setAttribute(...args), `setAttribute(${args.join(",")})`]);
+
+const arbRemoveAttribute: fc.Arbitrary<[DomBuilder, string]> = fc
+  .string({ maxLength: 2 })
+  .map((name) => [removeAttribute(name), `removeAttribute(${name})`]);
+
+const arbSetProp: fc.Arbitrary<[DomBuilder, string]> = fc
+  .tuple(fc.string({ maxLength: 2 }), fc.string())
+  .map((args) => [setProp(...args), `setProp(${args.join(",")})`]);
+
+const arbRemoveProp: fc.Arbitrary<[DomBuilder, string]> = fc
+  .string({ maxLength: 2 })
+  .map((name) => [removeProp(name), `removeProp(${name})`]);
 
 const arbDomBuilder_ = (size = 4): fc.Arbitrary<[DomBuilder, string]> =>
   fc
     .array(
       fc.oneof(
-        arbInsertChild(size),
+        arbInsertElement(size).withBias(5),
+        arbUpdateElement(size),
+        arbSetAttribute.withBias(5),
+        arbSetProp.withBias(5),
+        arbRemoveAttribute.withBias(5),
+        arbRemoveProp.withBias(5),
+        arbInsertText,
+        arbUpdateText,
         fc.constantFrom<[DomBuilder, string][]>(
           [prev, "prev"],
           [next, "next"],
@@ -222,6 +266,131 @@ describe("DomBuilder", () => {
   });
   it("obeys law: empty + removeNode: identity", () => {
     expectBuildersEqual(removeChild, identity);
+  });
+  it("obeys law: setAttribute / removeAttribute", () => {
+    fc.assert(
+      fc.property(
+        arbDomBuilder,
+        fc.string({ maxLength: 2 }),
+        fc.string(),
+        (b, name, value) => {
+          expectBuildersEqual(
+            flow(
+              b,
+              removeAttribute(name),
+              setAttribute(name, value),
+              removeAttribute(name),
+            ),
+            flow(b, removeAttribute(name)),
+          );
+        },
+      ),
+    );
+  });
+  it("obeys law: removeAttribute / setAttribute", () => {
+    fc.assert(
+      fc.property(
+        arbDomBuilder,
+        fc.string({ maxLength: 2 }),
+        fc.string(),
+        (b, name, value) => {
+          expectBuildersEqual(
+            flow(
+              b,
+              setAttribute(name, value),
+              removeAttribute(name),
+              setAttribute(name, value),
+            ),
+            flow(b, setAttribute(name, value)),
+          );
+        },
+      ),
+    );
+  });
+  it("obeys law: setProp / removeProp", () => {
+    fc.assert(
+      fc.property(
+        arbDomBuilder,
+        fc.string({ maxLength: 2 }),
+        fc.string(),
+        (b, name, value) => {
+          expectBuildersEqual(
+            flow(b, removeProp(name), setProp(name, value), removeProp(name)),
+            flow(b, removeProp(name)),
+          );
+        },
+      ),
+    );
+  });
+  it("obeys law: removeProp / setProp", () => {
+    fc.assert(
+      fc.property(
+        arbDomBuilder,
+        fc.string({ maxLength: 2 }),
+        fc.string(),
+        (b, name, value) => {
+          expectBuildersEqual(
+            flow(
+              b,
+              setProp(name, value),
+              removeProp(name),
+              setProp(name, value),
+            ),
+            flow(b, setProp(name, value)),
+          );
+        },
+      ),
+    );
+  });
+  it("obeys law: setAttribute: idempotent", () => {
+    fc.assert(
+      fc.property(
+        arbDomBuilder,
+        fc.string({ maxLength: 2 }),
+        fc.string(),
+        (b, name, value) => {
+          expectBuildersEqual(
+            flow(b, setAttribute(name, value), setAttribute(name, value)),
+            flow(b, setAttribute(name, value)),
+          );
+        },
+      ),
+    );
+  });
+  it("obeys law: removeAttribute: idempotent", () => {
+    fc.assert(
+      fc.property(arbDomBuilder, fc.string({ maxLength: 2 }), (b, name) => {
+        expectBuildersEqual(
+          flow(b, removeAttribute(name), removeAttribute(name)),
+          flow(b, removeAttribute(name)),
+        );
+      }),
+    );
+  });
+  it("obeys law: setProp: idempotent", () => {
+    fc.assert(
+      fc.property(
+        arbDomBuilder,
+        fc.string({ maxLength: 2 }),
+        fc.string(),
+        (b, name, value) => {
+          expectBuildersEqual(
+            flow(b, setProp(name, value), setProp(name, value)),
+            flow(b, setProp(name, value)),
+          );
+        },
+      ),
+    );
+  });
+  it("obeys law: removeProp: idempotent", () => {
+    fc.assert(
+      fc.property(arbDomBuilder, fc.string({ maxLength: 2 }), (b, name) => {
+        expectBuildersEqual(
+          flow(b, removeProp(name), removeProp(name)),
+          flow(b, removeProp(name)),
+        );
+      }),
+    );
   });
   it("prev does not affect generated document", () => {
     fc.assert(
