@@ -22,6 +22,9 @@ interface Element {
 
 type Node = Text | Element;
 
+const isElement = (node: Node): node is Element => node.type === "Element";
+const isText = (node: Node): node is Text => node.type === "Text";
+
 interface DraftElement {
   readonly tag: Tag;
   readonly props: Record<string, string>;
@@ -37,6 +40,16 @@ function publish(draft: DraftElement): Element {
     attributes: draft.attributes,
     props: draft.props,
     children: [...draft.leftChildren, ...draft.rightChildren],
+  };
+}
+
+function edit(element: Element): DraftElement {
+  return {
+    tag: element.tag,
+    attributes: element.attributes,
+    props: element.props,
+    leftChildren: [],
+    rightChildren: element.children,
   };
 }
 
@@ -85,7 +98,8 @@ export const start: DomBuilder = (draft) =>
 
 // Child node operations
 
-export const insertChild = (tag: Tag) => (
+export const insertElement = (
+  tag: Tag,
   childBuilder: DomBuilder,
 ): DomBuilder => (draft) =>
   pipe(tag, emptyDocument, childBuilder, (childDraft) => ({
@@ -93,17 +107,43 @@ export const insertChild = (tag: Tag) => (
     leftChildren: [...draft.leftChildren, publish(childDraft)],
   }));
 
-// export function updateElement(elementBuilder: DraftElement): DomBuilder {
-//   return (draft) => draft;
-// }
+export const updateElement = (elementBuilder: DomBuilder): DomBuilder => (
+  draft,
+) =>
+  pipe(
+    draft.rightChildren,
+    A.matchLeft(constant(draft), (n, ns) =>
+      isElement(n)
+        ? {
+            ...draft,
+            leftChildren: [
+              ...draft.leftChildren,
+              publish(elementBuilder(edit(n))),
+            ],
+            rightChildren: ns,
+          }
+        : draft,
+    ),
+  );
 
-// export function appendText(data: string): DomBuilder {
-//   return (draft) => draft;
-// }
+export const insertText = (data: string): DomBuilder => (draft) => ({
+  ...draft,
+  leftChildren: [...draft.leftChildren, { type: "Text", data }],
+});
 
-// export function updateText(data: string): DomBuilder {
-//   return (draft) => draft;
-// }
+export const updateText = (data: string): DomBuilder => (draft) =>
+  pipe(
+    draft.rightChildren,
+    A.matchLeft(constant(draft), (n, ns) =>
+      isText(n)
+        ? {
+            ...draft,
+            leftChildren: [...draft.leftChildren, { type: "Text", data }],
+            rightChildren: ns,
+          }
+        : draft,
+    ),
+  );
 
 export const removeChild: DomBuilder = (draft) =>
   pipe(

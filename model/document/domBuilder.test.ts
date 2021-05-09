@@ -8,12 +8,15 @@ import {
   DomBuilderMonoid,
   emptyDocument,
   end,
-  insertChild,
+  insertElement,
+  insertText,
   next,
   prev,
   removeChild,
   run,
   start,
+  updateElement,
+  updateText,
 } from "./domBuilder";
 
 const arbTag = fc.constantFrom<Tag[]>(
@@ -140,13 +143,13 @@ const arbTag = fc.constantFrom<Tag[]>(
 
 const arbInsertChild = (size = 4): fc.Arbitrary<[DomBuilder, string]> =>
   arbTag.chain((tag) =>
-    arbDomBuilder(size / 2).map(([builder, s]) => [
-      insertChild(tag)(builder),
-      `insertChild(${tag},${s}`,
+    arbDomBuilder_(Math.max(0, size - 1)).map(([builder, s]) => [
+      insertElement(tag, builder),
+      `insertChild(${tag},${s})`,
     ]),
   );
 
-const arbDomBuilder = (size = 4): fc.Arbitrary<[DomBuilder, string]> =>
+const arbDomBuilder_ = (size = 4): fc.Arbitrary<[DomBuilder, string]> =>
   fc
     .array(
       fc.oneof(
@@ -159,27 +162,62 @@ const arbDomBuilder = (size = 4): fc.Arbitrary<[DomBuilder, string]> =>
           [removeChild, "removeChild"],
         ),
       ),
-      { maxLength: Math.max(0, size * 5) },
+      { maxLength: size * 5 },
     )
     .map((builders) => [
       M.concatAll(DomBuilderMonoid)(builders.map(([b]) => b)),
       `[${builders.map(([, s]) => s).join(", ")}]`,
     ]);
 
+const arbDomBuilder: fc.Arbitrary<DomBuilder> = arbDomBuilder_().map(
+  ([b, s]) => {
+    b.toString = () => s;
+    return b;
+  },
+);
+
 describe("DomBuilder", () => {
   it("obeys law: insertChild / prev / removeChild", () => {
     fc.assert(
+      fc.property(arbDomBuilder, arbTag, arbDomBuilder, (b, tag, cb) => {
+        expectBuildersEqual(
+          flow(b, insertElement(tag, cb), prev, removeChild),
+          b,
+        );
+      }),
+    );
+  });
+  it("obeys law: insertChild / prev / updateElement", () => {
+    fc.assert(
       fc.property(
-        arbDomBuilder(),
+        arbDomBuilder,
         arbTag,
-        arbDomBuilder(),
-        ([b], tag, [cb]) => {
+        arbDomBuilder,
+        arbDomBuilder,
+        (b, tag, cb1, cb2) => {
           expectBuildersEqual(
-            flow(b, insertChild(tag)(cb), prev, removeChild),
-            b,
+            flow(b, insertElement(tag, cb1), prev, updateElement(cb2)),
+            flow(b, insertElement(tag, flow(cb1, start, cb2))),
           );
         },
       ),
+    );
+  });
+  it("obeys law: insertText / prev / removeChild", () => {
+    fc.assert(
+      fc.property(arbDomBuilder, fc.lorem(), (b, text) => {
+        expectBuildersEqual(flow(b, insertText(text), prev, removeChild), b);
+      }),
+    );
+  });
+  it("obeys law: insertText / prev / updateText", () => {
+    fc.assert(
+      fc.property(arbDomBuilder, fc.lorem(), fc.lorem(), (b, t1, t2) => {
+        expectBuildersEqual(
+          flow(b, insertText(t1), prev, updateText(t2)),
+          flow(b, insertText(t2)),
+        );
+      }),
     );
   });
   it("obeys law: empty + removeNode: identity", () => {
@@ -187,28 +225,28 @@ describe("DomBuilder", () => {
   });
   it("prev does not affect generated document", () => {
     fc.assert(
-      fc.property(arbDomBuilder(), ([b]) => {
+      fc.property(arbDomBuilder, (b) => {
         expectBuildersProduceSame(flow(b, prev), b);
       }),
     );
   });
   it("next does not affect generated document", () => {
     fc.assert(
-      fc.property(arbDomBuilder(), ([b]) => {
+      fc.property(arbDomBuilder, (b) => {
         expectBuildersProduceSame(flow(b, next), b);
       }),
     );
   });
   it("start does not affect generated document", () => {
     fc.assert(
-      fc.property(arbDomBuilder(), ([b]) => {
+      fc.property(arbDomBuilder, (b) => {
         expectBuildersProduceSame(flow(b, start), b);
       }),
     );
   });
   it("end does not affect generated document", () => {
     fc.assert(
-      fc.property(arbDomBuilder(), ([b]) => {
+      fc.property(arbDomBuilder, (b) => {
         expectBuildersProduceSame(flow(b, end), b);
       }),
     );
