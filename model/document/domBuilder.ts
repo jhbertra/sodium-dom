@@ -31,6 +31,7 @@ export interface Element {
   readonly props: Record<string, string>;
   readonly attributes: Record<string, string>;
   readonly children: Node[];
+  readonly classList: Record<string, undefined>;
 }
 
 export type Node = Text | Element;
@@ -45,25 +46,28 @@ interface DraftElement {
   readonly attributes: Record<string, string>;
   readonly leftChildren: Node[];
   readonly rightChildren: Node[];
+  readonly classList: Record<string, undefined>;
 }
 
 function publish(draft: DraftElement): Element {
   return {
-    type: "Element",
-    tag: draft.tag,
     attributes: draft.attributes,
-    props: draft.props,
+    classList: draft.classList,
     children: [...draft.leftChildren, ...draft.rightChildren],
+    props: draft.props,
+    tag: draft.tag,
+    type: "Element",
   };
 }
 
 function edit(element: Element): DraftElement {
   return {
-    tag: element.tag,
     attributes: element.attributes,
-    props: element.props,
+    classList: element.classList,
     leftChildren: [],
+    props: element.props,
     rightChildren: element.children,
+    tag: element.tag,
   };
 }
 
@@ -212,13 +216,21 @@ export const removeProp = (name: string): DomBuilder<void> =>
     props,
   }));
 
-// export function addToken(name: string, value: string): DomBuilder {
-//   return (draft) => draft;
-// }
+export const addToken = (name: string, value: string): DomBuilder<void> =>
+  name === "classList"
+    ? S.modify(({ classList, ...draft }) => ({
+        ...draft,
+        classList: { ...classList, [value]: undefined },
+      }))
+    : S.of(undefined);
 
-// export function removeToken(name: string, value: string): DomBuilder {
-//   return (draft) => draft;
-// }
+export const removeToken = (name: string, value: string): DomBuilder<void> =>
+  name === "classList"
+    ? S.modify(({ classList: { [value]: _, ...classList }, ...draft }) => ({
+        ...draft,
+        classList,
+      }))
+    : S.of(undefined);
 
 export const getMonoid = <A>(ma: Md.Monoid<A>): Md.Monoid<DomBuilder<A>> => ({
   empty: S.of(ma.empty),
@@ -300,7 +312,6 @@ export const Apply: Ap.Apply1<URI> = {
 };
 
 export const Applicative: Apl.Applicative1<URI> = {
-  ...Functor,
   ...Apply,
   ...Pointed,
 };
@@ -330,6 +341,7 @@ export const Monad: Mo.Monad1<URI> = {
 export const run = (tag: Tag) => <A>(builder: DomBuilder<A>): [A, Element] => {
   const [a, d] = builder({
     attributes: {},
+    classList: {},
     leftChildren: [],
     props: {},
     rightChildren: [],

@@ -1,9 +1,10 @@
 import fc from "fast-check";
-import { constant, identity, pipe } from "fp-ts/function";
+import { constant, pipe } from "fp-ts/function";
 import * as M from "fp-ts/Monoid";
 import { Tag } from "../../src/document";
 
 import {
+  addToken,
   DomBuilder,
   end,
   getMonoid,
@@ -15,6 +16,7 @@ import {
   removeAttribute,
   removeChild,
   removeProp,
+  removeToken,
   run,
   setAttribute,
   setProp,
@@ -187,6 +189,14 @@ const arbRemoveProp: fc.Arbitrary<[DomBuilder<void>, string]> = fc
   .string({ maxLength: 2 })
   .map((name) => [removeProp(name), `removeProp(${name})`]);
 
+const arbAddToken: fc.Arbitrary<[DomBuilder<void>, string]> = fc
+  .string({ maxLength: 2 })
+  .map((t) => [addToken("classList", t), `addToken(classList,${t})`]);
+
+const arbRemoveToken: fc.Arbitrary<[DomBuilder<void>, string]> = fc
+  .string({ maxLength: 2 })
+  .map((t) => [removeToken("classList", t), `addToken(classList,${t})`]);
+
 const testMonoid = getMonoid(M.monoidVoid);
 
 const seqBuilders = (...bs: DomBuilder<void>[]) => M.concatAll(testMonoid)(bs);
@@ -201,6 +211,8 @@ const arbDomBuilder_ = (size = 4): fc.Arbitrary<[DomBuilder<void>, string]> =>
         arbSetProp.withBias(5),
         arbRemoveAttribute.withBias(5),
         arbRemoveProp.withBias(5),
+        arbAddToken.withBias(2),
+        arbRemoveToken.withBias(2),
         arbInsertText,
         arbUpdateText,
         fc.constantFrom<[DomBuilder<void>, string][]>(
@@ -293,12 +305,7 @@ describe("DomBuilder", () => {
         fc.string(),
         (b, name, value) => {
           expectBuildersEqual(
-            seqBuilders(
-              b,
-              removeAttribute(name),
-              setAttribute(name, value),
-              removeAttribute(name),
-            ),
+            seqBuilders(b, setAttribute(name, value), removeAttribute(name)),
             seqBuilders(b, removeAttribute(name)),
           );
         },
@@ -313,12 +320,7 @@ describe("DomBuilder", () => {
         fc.string(),
         (b, name, value) => {
           expectBuildersEqual(
-            seqBuilders(
-              b,
-              setAttribute(name, value),
-              removeAttribute(name),
-              setAttribute(name, value),
-            ),
+            seqBuilders(b, removeAttribute(name), setAttribute(name, value)),
             seqBuilders(b, setAttribute(name, value)),
           );
         },
@@ -333,12 +335,7 @@ describe("DomBuilder", () => {
         fc.string(),
         (b, name, value) => {
           expectBuildersEqual(
-            seqBuilders(
-              b,
-              removeProp(name),
-              setProp(name, value),
-              removeProp(name),
-            ),
+            seqBuilders(b, setProp(name, value), removeProp(name)),
             seqBuilders(b, removeProp(name)),
           );
         },
@@ -353,16 +350,39 @@ describe("DomBuilder", () => {
         fc.string(),
         (b, name, value) => {
           expectBuildersEqual(
-            seqBuilders(
-              b,
-              setProp(name, value),
-              removeProp(name),
-              setProp(name, value),
-            ),
+            seqBuilders(b, removeProp(name), setProp(name, value)),
             seqBuilders(b, setProp(name, value)),
           );
         },
       ),
+    );
+  });
+  it("obeys law: addToken / removeToken", () => {
+    fc.assert(
+      fc.property(arbDomBuilder, fc.string({ maxLength: 2 }), (b, name) => {
+        expectBuildersEqual(
+          seqBuilders(
+            b,
+            addToken("classList", name),
+            removeToken("classList", name),
+          ),
+          seqBuilders(b, removeToken("classList", name)),
+        );
+      }),
+    );
+  });
+  it("obeys law: removeToken / addToken", () => {
+    fc.assert(
+      fc.property(arbDomBuilder, fc.string({ maxLength: 2 }), (b, name) => {
+        expectBuildersEqual(
+          seqBuilders(
+            b,
+            removeToken("classList", name),
+            addToken("classList", name),
+          ),
+          seqBuilders(b, addToken("classList", name)),
+        );
+      }),
     );
   });
   it("obeys law: setAttribute: idempotent", () => {

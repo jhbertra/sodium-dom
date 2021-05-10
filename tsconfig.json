@@ -5,7 +5,7 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "importHelpers": true,
-    "lib": ["ES5", "ES6", "DOM", "ES2019.Array"],
+    "lib": ["ES5", "ES6", "DOM", "ES2019.Array", "ES2019"],
     "module": "commonjs",
     "moduleResolution": "node",
     "noFallthroughCasesInSwitch": true,
