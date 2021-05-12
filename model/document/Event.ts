@@ -2,7 +2,7 @@
  * @description An inefficient semantic reference model for building a DOM.
  */
 
-import { flow, pipe } from "fp-ts/lib/function";
+import { constant, flow, pipe } from "fp-ts/lib/function";
 import * as A from "fp-ts/lib/Array";
 import * as E from "fp-ts/lib/Either";
 import * as F from "fp-ts/lib/Functor";
@@ -93,6 +93,18 @@ export const Functor: F.Functor1<URI> = {
 // -------------------------------------------------------------------------------------
 // Utilities
 // -------------------------------------------------------------------------------------
+
+export const hold: <A>(init: A) => (e: Event<A>) => B.Behaviour<A> = (init) => (
+  e,
+) => {
+  const value = pipe(e.value, O.getOrElse(constant(init)));
+  return {
+    value,
+    get next() {
+      return hold(value)(e.next);
+    },
+  };
+};
 
 export const switchB: <A>(b: B.Behaviour<Event<A>>) => Event<A> = (b) => ({
   value: b.value.value,

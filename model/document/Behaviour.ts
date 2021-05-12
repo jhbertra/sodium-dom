@@ -158,3 +158,28 @@ export const Monad: Mo.Monad1<URI> = {
 // -------------------------------------------------------------------------------------
 
 export const sample: <A>(b: Behaviour<A>) => A = ({ value }) => value;
+
+export const sequence: <A>(bs: Behaviour<A>[]) => Behaviour<A[]> = <A>(
+  bs: Behaviour<A>[],
+) =>
+  pipe(
+    bs,
+    A.reduce(of([] as A[]), (bas, ba) => pipe(ba, map(A.append), ap(bas))),
+  );
+
+export const split: <A, B>(
+  b: Behaviour<[A, B]>,
+) => [Behaviour<A>, Behaviour<B>] = (b) => [
+  {
+    value: b.value[0],
+    get next() {
+      return split(b.next)[0];
+    },
+  },
+  {
+    value: b.value[1],
+    get next() {
+      return split(b.next)[1];
+    },
+  },
+];

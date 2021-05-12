@@ -30,6 +30,7 @@ export interface Element {
   readonly tag: Tag;
   readonly props: Record<string, string>;
   readonly attributes: Record<string, string>;
+  readonly style: Record<string, string>;
   readonly children: Node[];
   readonly classList: Record<string, undefined>;
 }
@@ -44,6 +45,7 @@ interface DraftElement {
   readonly tag: Tag;
   readonly props: Record<string, string>;
   readonly attributes: Record<string, string>;
+  readonly style: Record<string, string>;
   readonly leftChildren: Node[];
   readonly rightChildren: Node[];
   readonly classList: Record<string, undefined>;
@@ -56,6 +58,7 @@ function publish(draft: DraftElement): Element {
     children: [...draft.leftChildren, ...draft.rightChildren],
     props: draft.props,
     tag: draft.tag,
+    style: draft.style,
     type: "Element",
   };
 }
@@ -67,6 +70,7 @@ function edit(element: Element): DraftElement {
     leftChildren: [],
     props: element.props,
     rightChildren: element.children,
+    style: element.style,
     tag: element.tag,
   };
 }
@@ -216,6 +220,19 @@ export const removeProp = (name: string): DomBuilder<void> =>
     props,
   }));
 
+export const setStyle = (name: string, value: string): DomBuilder<void> =>
+  S.modify(({ style, ...draft }) => ({
+    ...draft,
+    style: { ...style, [name]: value },
+  }));
+
+export const removeStyle = (name: string): DomBuilder<void> =>
+  S.modify(({ // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    style: { [name]: _, ...style }, ...draft }) => ({
+    ...draft,
+    style,
+  }));
+
 export const addToken = (name: string, value: string): DomBuilder<void> =>
   name === "classList"
     ? S.modify(({ classList, ...draft }) => ({
@@ -345,7 +362,15 @@ export const run = (tag: Tag) => <A>(builder: DomBuilder<A>): [A, Element] => {
     leftChildren: [],
     props: {},
     rightChildren: [],
+    style: {},
     tag,
   });
   return [a, publish(d)];
 };
+
+export const get: () => DomBuilder<DraftElement> = S.get;
+export const gets: <A>(f: (draft: DraftElement) => A) => DomBuilder<A> = S.gets;
+export const put: (draft: DraftElement) => DomBuilder<void> = S.put;
+export const modify: (
+  f: (draft: DraftElement) => DraftElement,
+) => DomBuilder<void> = S.modify;
