@@ -2,46 +2,36 @@
  * @description An inefficient semantic reference model for building a DOM.
  */
 
-import { identity, pipe } from "fp-ts/lib/function";
+import { constant, flow, identity, pipe } from "fp-ts/lib/function";
 import * as A from "fp-ts/lib/Array";
 import * as C from "fp-ts/lib/Chain";
 import * as Ap from "fp-ts/lib/Apply";
 import * as Apl from "fp-ts/lib/Applicative";
 import * as Mo from "fp-ts/lib/Monad";
+import * as Mon from "fp-ts/lib/Monoid";
 import * as P from "fp-ts/lib/Pointed";
 import * as F from "fp-ts/lib/Functor";
-import { NonEmptyArray } from "fp-ts/lib/NonEmptyArray";
+import * as S from "fp-ts/lib/Semigroup";
 
 // -------------------------------------------------------------------------------------
 // model
 // -------------------------------------------------------------------------------------
 
-// Model of a Behaviour (Cell) as an infinite stream of values.
+// Model of a Behaviour as a function from time to a value.
+const sym = Symbol("Behaviour");
 export interface Behaviour<A> {
-  readonly value: A;
-  readonly next: Behaviour<A>;
+  (tine: number): A;
+  readonly _brand: typeof sym;
 }
 
 // -------------------------------------------------------------------------------------
 // constructors
 // -------------------------------------------------------------------------------------
 
-export const constant: <A>(a: A) => Behaviour<A> = (a) => ({
-  value: a,
-  get next() {
-    return constant(a);
-  },
-});
+// eslint-disable-next-line @typescript-eslint/no-unsafe-return
+export const B: <A>(m: (time: number) => A) => Behaviour<A> = (m) => m as any;
 
-export const listToInfStream: <A>(a: NonEmptyArray<A>) => Behaviour<A> = ([
-  a,
-  ...as
-]) => ({
-  value: a,
-  get next() {
-    return A.isNonEmpty(as) ? listToInfStream(as) : constant(a);
-  },
-});
+export const unB: <A>(moment: Behaviour<A>) => (time: number) => A = identity;
 
 // -------------------------------------------------------------------------------------
 // non-pipeables
@@ -57,32 +47,19 @@ const _chain: C.Chain1<URI>["chain"] = (ma, f) => pipe(ma, chain(f));
 
 export const map: <A, B>(
   f: (a: A) => B,
-) => (fa: Behaviour<A>) => Behaviour<B> = (f) => (fa) => ({
-  value: f(fa.value),
-  get next() {
-    return map(f)(fa.next);
-  },
-});
+) => (fa: Behaviour<A>) => Behaviour<B> = (f) => (fa) => B(flow(unB(fa), f));
 
 export const ap: <A>(
   fa: Behaviour<A>,
-) => <B>(fab: Behaviour<(a: A) => B>) => Behaviour<B> = (fa) => (fab) => ({
-  value: fab.value(fa.value),
-  get next() {
-    return ap(fa.next)(fab.next);
-  },
-});
+) => <B>(fab: Behaviour<(a: A) => B>) => Behaviour<B> = (fa) => (fab) =>
+  B((t) => unB(fab)(t)(unB(fa)(t)));
 
-export const of: P.Pointed1<URI>["of"] = constant;
+export const of: P.Pointed1<URI>["of"] = flow(constant, B);
 
 export const chain: <A, B>(
   f: (a: A) => Behaviour<B>,
-) => (ma: Behaviour<A>) => Behaviour<B> = (f) => (ma) => ({
-  value: f(ma.value).value,
-  get next() {
-    return chain(f)(ma.next);
-  },
-});
+) => (ma: Behaviour<A>) => Behaviour<B> = (f) => (ma) =>
+  B((t) => unB(f(unB(ma)(t)))(t));
 
 export const flatten: <A>(mma: Behaviour<Behaviour<A>>) => Behaviour<A> = chain(
   identity,
@@ -153,33 +130,57 @@ export const Monad: Mo.Monad1<URI> = {
   ...Applicative,
 };
 
+export function getSemigroup<A>(
+  semigroupA: S.Semigroup<A>,
+): S.Semigroup<Behaviour<A>> {
+  return {
+    concat(bx, by) {
+      return zipWith((x: A) => (y: A) => semigroupA.concat(x, y))(bx)(by);
+    },
+  };
+}
+
+export function getMonoid<A>(monoidA: Mon.Monoid<A>): Mon.Monoid<Behaviour<A>> {
+  return {
+    ...getSemigroup(monoidA),
+    empty: B(constant(monoidA.empty)),
+  };
+}
+
 // -------------------------------------------------------------------------------------
 // Utilities
 // -------------------------------------------------------------------------------------
 
-export const sample: <A>(b: Behaviour<A>) => A = ({ value }) => value;
+export const take: (n: number) => <A>(b: Behaviour<A>) => A[] = (n) => (b) =>
+  pipe(A.range(0, n), A.map(b));
 
-export const sequence: <A>(bs: Behaviour<A>[]) => Behaviour<A[]> = <A>(
+export const drop: (n: number) => <A>(b: Behaviour<A>) => Behaviour<A> = (
+  n,
+) => (b) => B((t) => b(t - n));
+
+export const sequenceArray: <A>(bs: Behaviour<A>[]) => Behaviour<A[]> = <A>(
   bs: Behaviour<A>[],
-) =>
-  pipe(
-    bs,
-    A.reduce(of([] as A[]), (bas, ba) => pipe(ba, map(A.append), ap(bas))),
-  );
+) => B((t) => bs.map((b) => b(t)));
 
-export const split: <A, B>(
+export const unzip: <A, B>(
   b: Behaviour<[A, B]>,
 ) => [Behaviour<A>, Behaviour<B>] = (b) => [
-  {
-    value: b.value[0],
-    get next() {
-      return split(b.next)[0];
-    },
-  },
-  {
-    value: b.value[1],
-    get next() {
-      return split(b.next)[1];
-    },
-  },
+  B((t) => b(t)[0]),
+  B((t) => b(t)[1]),
 ];
+
+export const zip = <A>(as: Behaviour<A>) => <B>(
+  bs: Behaviour<B>,
+): Behaviour<[A, B]> => B((t) => [as(t), bs(t)]);
+
+export const zipWith: <A, B, C>(
+  f: (a: A) => (b: B) => C,
+) => (as: Behaviour<A>) => (bs: Behaviour<B>) => Behaviour<C> = (f) => (as) => (
+  bs,
+) => B((t) => f(as(t))(bs(t)));
+
+export const divide: (
+  pivot: number,
+) => <A>(left: Behaviour<A>) => (right: Behaviour<A>) => Behaviour<A> = (
+  pivot,
+) => (left) => (right) => B((t) => (t < pivot ? left(t) : right(t)));

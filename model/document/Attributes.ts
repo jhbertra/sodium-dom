@@ -31,6 +31,9 @@ export interface StyleAttribute {
   readonly value: B.Behaviour<string>;
 }
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export type Attribute<T extends Tag = Tag> =
   | PropAttribute
   | TokensAttribute
@@ -54,8 +57,7 @@ export const prop: <T extends Tag>(
 
 export const tokens: <T extends Tag>(
   name: string,
-  value: B.Behaviour<string[]>,
-) => Attribute<T> = (name, value) => ({
+) => (value: B.Behaviour<string[]>) => Attribute<T> = (name) => (value) => ({
   type: "Tokens",
   name,
   value,
@@ -86,7 +88,7 @@ export const style: <T extends Tag>(
 export function className<T extends Tag>(
   value: B.Behaviour<string[]>,
 ): Attribute<T> {
-  return tokens("classList", value);
+  return tokens("classList")(value);
 }
 
 export function classList<T extends Tag>(listMap: TokenListMap): Attribute<T> {
@@ -575,7 +577,7 @@ export function srclang(value: B.Behaviour<string>): Attribute<"track"> {
 // iframes
 
 export function sandbox(value: B.Behaviour<string[]>): Attribute<"iframe"> {
-  return tokens("sandbox", value);
+  return tokens("sandbox")(value);
 }
 
 export function sandboxList(listMap: TokenListMap): Attribute<"iframe"> {
